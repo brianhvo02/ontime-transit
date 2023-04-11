@@ -2,7 +2,9 @@
 const nextConfig = {
   experimental: {
     appDir: true,
+    esmExternals: 'loose'
   },
+  transpilePackages: ['ol', 'rlayers']
 }
 
-module.exports = nextConfig
+module.exports = nextConfig;
