@@ -1,0 +1,31 @@
+@import '../../variables';
+
+header {
+    .header-left, .header-center, .header-right {
+        position: absolute;
+
+        margin: 1.5vh 1.5vw;
+
+        svg {
+            height: 3vh;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+    }
+
+    .header-left {
+        left: 0;
+    }
+    
+    .header-center {
+        left: 50%;
+        transform: translateX(-50%);
+
+        line-height: 3vh;
+        text-align: center;
+    }
+
+    .header-right {
+        right: 0;
+    }
+}

@@ -1,0 +1,12 @@
+@import '../../variables';
+
+footer {
+    background-color: $dark-color;
+    height: 5vh;
+    
+    p {
+        color: $background-color;
+        text-align: center;
+        line-height: 5vh;
+    }
+}
