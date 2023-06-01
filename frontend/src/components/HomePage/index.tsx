@@ -1,16 +1,10 @@
-import { createPortal } from 'react-dom';
+// import { createPortal } from 'react-dom';
 import { useGetAgenciesQuery } from '../../store/api/agency';
 import Modal from '../Modal';
 import Loading from '../Modal/Loading';
 import './index.scss';
-import { convertApiError, generateColor, hexToRGB } from '../../store/utils';
-import { useEffect, useMemo, useState } from 'react';
 import HomeMap from './Map';
-import { skipToken } from '@reduxjs/toolkit/dist/query';
-import { LngLatBounds } from 'mapbox-gl';
-import { GeoJsonLayer } from '@deck.gl/layers/typed';
-import { Feature, Polygon } from 'geojson';
-import { Agency } from 'gtfs-types';
+// import { skipToken } from '@reduxjs/toolkit/dist/query';
 
 // const DisplaySuccess = ({ successData }: { successData?: string }) => {
 //     return (
@@ -55,34 +49,6 @@ const HomePage = () => {
     //     document.body
     // );
 
-    const convexes = useMemo(() => agencies.data?.agencies.map(agency => agency.area).filter(area => area), [agencies]);
-
-    const agenciesLayer = useMemo(() =>
-        new GeoJsonLayer({
-            id: 'agencies',
-            data: convexes,
-            pickable: true,
-            filled: false,
-            stroked: false,
-            lineWidthUnits: 'pixels',
-            getLineWidth: 2,
-            getText: ({ properties }: Feature<Polygon, Agency>) => properties.agency_name,
-            getTextColor: [0, 0, 0],
-            getTextSize: 16
-        }), [agencies]
-    );
-
-    const routesLayer = useMemo(() =>
-        new GeoJsonLayer({
-            id: 'routes',
-            data: agencies.data?.routes,
-            pickable: true,
-            lineWidthUnits: 'pixels',
-            getLineColor: ({ properties }: Feature) => hexToRGB(properties?.route_color ?? '') ?? [245, 245, 245],
-            getLineWidth: 2
-        }), [agencies]
-    );
-//[-123.0543893911,36.97474289,-120.94846,39.09982]
     return (
         <div className='homepage'>
             {
@@ -93,7 +59,7 @@ const HomePage = () => {
             }
             {
                 agencies.isSuccess &&
-                <HomeMap initialBounds={new LngLatBounds(agencies.data.bounds)} layers={[agenciesLayer, routesLayer]} />
+                <HomeMap agenciesData={agencies.data} />
             }
         </div>
     );

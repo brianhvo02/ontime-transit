@@ -53,10 +53,10 @@ export const tileXYToQuadKey = (x: number, y: number, z: number) => {
 
         mask = 1 << (i - 1);
 
-        if ((x & mask) != 0)
+        if ((x & mask) !== 0)
             digit++;
         
-        if ((y & mask) != 0)
+        if ((y & mask) !== 0)
             digit = digit + 2;
 
         quadKey += digit;

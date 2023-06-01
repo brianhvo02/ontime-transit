@@ -2,7 +2,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import { join } from 'path';
 // import TestRouter from './routes/test';
-import { PORT } from './config.js';
+import { PORT, BING_MAPS_KEY } from './config.js';
 import { ServerError } from './errors.js';
 import { gtfsLoader } from './middleware/gtfs.js';
 import { __dirname } from './utils.js';
@@ -17,6 +17,41 @@ app.use(gtfsLoader);
 // app.use('/api/test', TestRouter);
 app.use('/api/agencies', AgencyRouter);
 app.use('/api/routes', RouteRouter);
+
+app.get('/api/mapStyle', async (req, res) => {
+    const resource = await fetch(`https://dev.virtualearth.net/REST/v1/Imagery/Metadata/Aerial?key=${BING_MAPS_KEY}`)
+        .then(res => res.json())
+        .then(data => data.resourceSets[0].resources[0]);
+    res.json({
+        version: 8,
+        name: 'Bing Maps Aerial',
+        sprite: 'mapbox://sprites/mapbox/satellite-v9',
+        glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
+        sources: {
+            'bing': {
+                type: 'raster',
+                tiles: resource.imageUrlSubdomains.map((subdomain: string) => resource.imageUrl.replace('{subdomain}', subdomain)),
+                tileSize: resource.imageWidth
+            },
+        },
+        layers: [
+            {
+                id: 'background', 
+                type: 'background', 
+                paint: {
+                    'background-color': 'rgb(4,7,14)'
+                }
+            },
+            {
+                id: 'simple-tiles',
+                type: 'raster',
+                source: 'bing',
+                minzoom: resource.zoomMin,
+                maxzoom: resource.zoomMax - 1
+            },
+        ],
+    });
+});
 
 app.use('/api/*', (req, res) => {
     res.status(404).json({ error: `${req.method} ${req.baseUrl} is not a valid path` });
