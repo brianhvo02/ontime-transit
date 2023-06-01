@@ -1,9 +1,18 @@
 @import '../../variables';
 
 header {
-    .header-left, .header-center, .header-right {
-        position: absolute;
+    position: relative;
+    z-index: 5;
 
+    background-color: rgba($dark-color, 0.5);
+    height: 8vh;
+    width: 100vw;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .header-left, .header-center, .header-right {
         margin: 1.5vh 1.5vw;
 
         svg {
@@ -12,20 +21,18 @@ header {
             transition: 0.2s;
         }
     }
-
-    .header-left {
-        left: 0;
-    }
     
     .header-center {
-        left: 50%;
-        transform: translateX(-50%);
-
         line-height: 3vh;
         text-align: center;
-    }
 
-    .header-right {
-        right: 0;
+        display: flex;
+        align-items: center;
+
+        svg {
+            height: 5vh;
+            margin: 0 1vw;
+        }
     }
+    
 }

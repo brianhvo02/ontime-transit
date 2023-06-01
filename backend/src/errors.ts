@@ -21,3 +21,8 @@ export class UnprocessableEntity extends ServerError {
         super(msg);
     }
 }
+
+export const isError = (e: unknown): e is Error => 
+    typeof e === 'object' 
+        && e !== null 
+        && 'message' in e;

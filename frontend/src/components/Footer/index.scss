@@ -1,12 +1,32 @@
 @import '../../variables';
 
 footer {
-    background-color: $dark-color;
+    background-color: rgba($dark-color, 0.5);
     height: 5vh;
+
+    position: relative;
+    z-index: 5;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
     
     p {
-        color: $background-color;
+        color: $text-color;
         text-align: center;
         line-height: 5vh;
+    }
+
+    svg {
+        margin-left: 1rem;
+        color: $text-color;
+    }
+
+    svg:hover {
+        color: $light-color;
+    }
+
+    img {
+        height: 5vh;
     }
 }

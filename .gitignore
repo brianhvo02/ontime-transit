@@ -130,6 +130,3 @@ dist
 .pnp.*
 
 build
-
-frontend/public/*
-!frontend/public/index.html

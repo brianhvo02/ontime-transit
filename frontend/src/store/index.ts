@@ -1,14 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit';
 import ConfigReducer from './config';
-import { api } from './api';
+import agencyApi from './api/agency';
 
 export const store = configureStore({
     reducer: {
         config: ConfigReducer,
-        [api.reducerPath]: api.reducer
+        [agencyApi.reducerPath]: agencyApi.reducer
     },
     middleware: getDefaultMiddleware =>
-        getDefaultMiddleware().concat(api.middleware)
+        getDefaultMiddleware().concat(agencyApi.middleware)
 })
 
 export type RootState = ReturnType<typeof store.getState>;
