@@ -1,7 +1,7 @@
 import { Request, Router } from 'express';
 import { ServerError, UnprocessableEntity, isError } from '../errors.js';
 import { getAgencies, getRoutes, getShapesAsGeoJSON } from 'gtfs';
-import { bbox, bboxPolygon, convex, featureCollection, multiLineString } from '@turf/turf';
+import { area, bbox, bboxPolygon, convex, featureCollection, multiLineString } from '@turf/turf';
 import { FeatureCollection, MultiLineString, Position } from 'geojson';
 import { Route } from 'gtfs-types';
 

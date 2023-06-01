@@ -36,7 +36,7 @@ class OverlayControl implements IControl {
     }
 }
   
-export default function CustomOverlay(props: {children: React.ReactElement}) {
+export default function CustomOverlay(props: { children: React.ReactElement }) {
     const [, setVersion] = useState(0);
 
     const ctrl = useControl<OverlayControl>(() => {

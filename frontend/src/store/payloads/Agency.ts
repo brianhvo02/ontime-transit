@@ -2,7 +2,6 @@ import { Agency as GTFSAgency, Route } from 'gtfs-types';
 import { Feature, FeatureCollection, Polygon } from 'geojson';
 
 export interface Agency extends GTFSAgency {
-    routes: Route[];
     box: Feature<Polygon, GTFSAgency>;
     area: Feature<Polygon, GTFSAgency>;
 }
