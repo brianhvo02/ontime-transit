@@ -1,24 +1,24 @@
-import './Map.scss';
-import {CesiumIonLoader} from '@loaders.gl/3d-tiles';
-import Map, { NavigationControl, useControl, GeolocateControl, FullscreenControl, AttributionControl, SkyLayer, Source, Layer, useMap, MapRef } from 'react-map-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
-import { LngLatBounds } from 'mapbox-gl';
-import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { hexToRGB, tileXYToQuadKey } from '../../store/utils';
-import { GeoJsonLayer } from '@deck.gl/layers/typed';
-import { Agencies, Agency, Vehicle, VehiclePayload } from '../../store/payloads/Agency';
-import { Feature, Polygon } from 'geojson';
-import CustomOverlay from '../SatelliteControl';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowPointer, faBuilding, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { area, bbox } from '@turf/turf';
-import { Agency as GTFSAgency } from 'gtfs-types';
-import { useGetVehiclesQuery } from '../../store/api/agency';
-import { skipToken } from '@reduxjs/toolkit/dist/query';
 import { Tile3DLayer } from '@deck.gl/geo-layers/typed';
+import { GeoJsonLayer } from '@deck.gl/layers/typed';
+import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
+import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
+import { faArrowPointer, faBuilding, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { CesiumIonLoader } from '@loaders.gl/3d-tiles';
+import { skipToken } from '@reduxjs/toolkit/dist/query';
+import { area, bbox } from '@turf/turf';
+import { Feature, Polygon } from 'geojson';
+import { Agency as GTFSAgency } from 'gtfs-types';
+import { LngLatBounds } from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import Map, { AttributionControl, FullscreenControl, GeolocateControl, Layer, MapRef, NavigationControl, SkyLayer, Source, useControl } from 'react-map-gl';
+import { useGetVehiclesQuery } from '../../store/api/agency';
+import { Agencies, Vehicle } from '../../store/payloads/Agency';
+import { hexToRGB } from '../../store/utils';
+import CustomOverlay from '../SatelliteControl';
+import './Map.scss';
 
 const DeckGLOverlay = (props: MapboxOverlayProps & {
     interleaved?: boolean;
@@ -70,7 +70,10 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
     const [cursor, setCursor] = useState(false);
     const [startSelection, setStartSelection] = useState(false);
     const [selectedAgency, setSelectedAgency] = useState<GTFSAgency | undefined>();
-    const { data: vehicles } = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken, { pollingInterval: 60000 });
+    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
+    const { data: vehicles } = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken
+        // , { pollingInterval: 60000 }
+    );
     const [hovered, setHovered] = useState<GTFSAgency | undefined>();
     const [showSatellite, setShowSatellite] = useState(false);
     const [showTerrain, setShowTerrain] = useState(false);
@@ -80,6 +83,7 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
     const convexes = useMemo(() => agenciesData?.agencies.map(agency => agency.area).filter(area => area).sort((a, b) => area(b) - area(a)), [agenciesData]);
 
     const [tilesetUrl, setTilesetUrl] = useState<string | undefined>();
+    const [satelliteUrls, setSatelliteUrls] = useState<string[]>([]);
 
     useEffect(() => {
         fetch('https://api.cesium.com/v1/assets/96188/endpoint', {
@@ -87,21 +91,53 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 'Authorization': `Bearer ${process.env.REACT_APP_CESIUM_ACCESS_TOKEN}`
             }
         }).then(res => res.json()).then(data => setTilesetUrl(data.url)); 
+
+        // fetch(`https://dev.virtualearth.net/REST/v1/Imagery/Metadata/Aerial?key=${process.env.REACT_APP_BING_MAPS_KEY}`)
+        //     .then(res => res.json())
+        //     .then(data => {
+        //         const resource = data.resourceSets[0].resources[0];
+        //         const urls = resource.imageUrlSubdomains.map((subdomain: string) => `{z}|{x}|{y}|${resource.imageUrl.replace('{subdomain}', subdomain)}`);
+        //         setSatelliteUrls(urls);
+        //     });
     }, []);
+
+    // const terrainLayer = new TerrainLayer({
+    //     id: 'terrain',
+    //     minZoom: 0,
+    //     strategy: 'no-overlap',
+    //     elevationDecoder: {
+    //         rScaler: 6553.6,
+    //         gScaler: 25.6,
+    //         bScaler: 0.1,
+    //         offset: -10000
+    //     },
+    //     elevationData: `https://api.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.png?access_token=${process.env.REACT_APP_MAPBOX_ACCESS_TOKEN}`,
+    //     texture: satelliteUrls,
+    //     operation: 'terrain',
+    //     fetch: (url, context) => {
+    //         if (context.propName === 'elevationData')
+    //             return load(url, [TerrainLoader], context.loadOptions);
+
+    //         const [z, x, y, bingUrl] = url.split('|');
+    //         const quadkey = tileXYToQuadKey(parseInt(x), parseInt(y), parseInt(z));
+                
+    //         return load(bingUrl.replace('{quadkey}', quadkey), [ImageLoader], context.loadOptions);
+    //     },
+    //     visible: !!satelliteUrls.length && showTerrain
+    // });
+
+    // const extensions = showTerrain ? [new TerrainExtension()] : [];
 
     const layer3d = new Tile3DLayer({
         id: 'tile-3d-layer',
-        // data: 'https://tiles.arcgis.com/tiles/z2tnIkrLQ2BRzr6P/arcgis/rest/services/SanFrancisco_Bldgs/SceneServer/layers/0',
-        // loader: I3SLoader,
         data: tilesetUrl,
         loader: CesiumIonLoader,
         loadOptions: {
             'cesium-ion': { accessToken: process.env.REACT_APP_CESIUM_ACCESS_TOKEN }
         },
-        // _subLayerProps: {
-        //     scenegraph: {_lighting: 'flat'}
-        // }
-        visible: show3D
+
+        visible: show3D,
+        // extensions
     });
 
     const agenciesLayer = new GeoJsonLayer({
@@ -121,7 +157,8 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
             setHovered(undefined);
             map.current?.fitBounds(new LngLatBounds(bbox(pickingInfo.object) as [number, number, number, number]), { padding: 64, duration: 1000 });
         },
-        visible: !selectedAgency
+        visible: !selectedAgency,
+        // extensions
     });
 
     const routesLayer = new GeoJsonLayer({
@@ -133,16 +170,18 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
         getLineWidth: 2,
         updateTriggers: {
             getLineColor: [hovered, selectedAgency]
-        }
+        },
+        // extensions
     });
 
     const vehiclesLayer = new ScenegraphLayer({
         id: 'vehicles',
         data: vehicles ? Object.values(vehicles): undefined,
         pickable: true,
-        sizeScale: 0.4,
+        // sizeScale: 0.1,
         scenegraph: '/bus.glb',
-        sizeMaxPixels: 3,
+        sizeMaxPixels: 1,
+        sizeMinPixels: 0.1,
         // _animations: {
         //     '*': { speed: 1 }
         // },
@@ -163,6 +202,19 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
             getPosition: vehicles,
             getOrientation: vehicles
         },
+        onClick: pickingInfo => {
+            const vehicle: Vehicle = pickingInfo.object;
+            setSelectedVehicle(vehicle);
+            if (vehicle) 
+                map.current?.flyTo({ 
+                    center: [vehicle.longitude, vehicle.latitude],
+                    bearing: (vehicle.bearing ?? 0) - 90,
+                    pitch: 65,
+                    zoom: 17,
+                    duration: 1000,
+                });
+        },
+        // extensions
     });
 
     return (
@@ -181,7 +233,7 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
             }}
             attributionControl={false}
             cursor={cursor ? 'pointer' : 'default'}
-            terrain={showTerrain ? {source: 'mapbox-dem', exaggeration: 1.5} : undefined}
+            terrain={showTerrain ? { source: 'mapbox-dem' } : undefined}
             maxZoom={19}
         >
             <Source
@@ -192,9 +244,9 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 maxzoom={14}
             />
             <Layer {...skyLayer} />
-            <NavigationControl style={{ marginTop: 'calc(8vh + 10px)' }} />
-            <GeolocateControl />
-            <FullscreenControl />
+            <NavigationControl position='top-left' />
+            <GeolocateControl position='top-left' />
+            <FullscreenControl position='top-left' />
             <CustomOverlay>
                 <button type='button' aria-label={showSatellite ? 'Switch to map view' : 'Switch to satellite/terrain view'} onClick={() => setShowSatellite(prev => !prev)}>
                     <span 
@@ -266,18 +318,39 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 startSelection &&
                 <CustomOverlay>
                     <div className='display'>
-                        <h2>{(hovered || selectedAgency)?.agency_name ?? 'Select an agency.'}</h2>
-                        <a href={(hovered || selectedAgency)?.agency_url} target='_blank' rel='noreferer'>{(hovered || selectedAgency)?.agency_url}</a>
+                        <section className='agency-info'>
+                            <h1>{(hovered || selectedAgency)?.agency_name ?? 'Select an agency.'}</h1>
+                            <a href={(hovered || selectedAgency)?.agency_url} target='_blank' rel='noreferer'>{(hovered || selectedAgency)?.agency_url}</a>
+                        </section>
+                        {
+                            selectedVehicle && 
+                            <section className='vehicle-info'>
+                                <h2>Vehicle Info</h2>
+                                <div>
+                                    <h3>Route</h3>
+                                    <h3>{selectedVehicle.route_long_name} ({selectedVehicle.route_short_name})</h3>
+                                </div>
+                                <div>
+                                    <h4>Coordinates</h4>
+                                    <p>{selectedVehicle.latitude}, {selectedVehicle.longitude}</p>
+                                </div>
+                                <div>
+                                    <h4>Speed / Bearing</h4>
+                                    <p>{Math.round(selectedVehicle.speed ?? 0)} mph / {selectedVehicle.bearing ?? 0}°</p>
+                                </div>
+                            </section>
+                        }
                     </div>
                 </CustomOverlay>
             }
             <AttributionControl customAttribution='Transit data from 511 SF Bay' />
             <DeckGLOverlay
                 layers={[
+                    // terrainLayer,
+                    layer3d,
                     routesLayer,
                     agenciesLayer,
                     vehiclesLayer,
-                    layer3d,
                 ]}
             />
         </Map>

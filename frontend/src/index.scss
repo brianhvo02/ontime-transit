@@ -23,20 +23,39 @@ a {
 }
 
 h1 {
+    line-height: 2.75vh;
     font-size: 2.5vh;
     font-weight: bold;
 }
 
 h2 {
+    line-height: 2.25vh;
     font-size: 2vh;
     font-weight: bold;
 }
 
+h3 {
+    line-height: 1.75vh;
+    font-size: 1.5vh;
+    font-weight: bold;
+}
+
+h4 {
+    line-height: 1.5vh;
+    font-size: 1.25vh;
+    font-weight: bold;
+}
+
 p, span, a {
+    line-height: 1.5vh;
     font-size: 1.25vh;
 }
 
-h1, h2, p, span, a {
+p {
+    margin: 0.25em 0;
+}
+
+h1, h2, h3, h4, p, span, a {
     color: $text-color;
 }
 

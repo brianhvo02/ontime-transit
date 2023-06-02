@@ -70,5 +70,5 @@ app.use((err: ServerError, req: Request, res: Response, next: NextFunction) => {
 
 app.listen(PORT || 5000, () => {
     console.log(`App listening on port ${PORT || 5000}`);
-    setInterval(() => updateGtfsRealtime(gtfsConfig), 60000);
+    // setInterval(() => updateGtfsRealtime(gtfsConfig), 60000);
 })

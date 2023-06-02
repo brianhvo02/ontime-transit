@@ -8,11 +8,38 @@
 
     text-align: right;
 
-    h2, p, a {
+    h1, h2, h3, h4, p, a {
         color: $primary-color;
     }
 
     h2 {
         margin-bottom: 1vh;
+    }
+
+    .agency-info {
+        a {
+            display: block;
+            margin-top: 0.5em;
+        }
+    }
+
+    .vehicle-info {
+        margin-top: 2em;
+
+        div {
+            margin-top: 1em;
+        }
+    }
+}
+
+.mapboxgl-ctrl-top-left {
+    .mapboxgl-ctrl-group:nth-child(2) {
+        margin-top: calc(8vh + 10px);
+    }
+}
+
+.mapboxgl-ctrl-top-right {
+    .mapboxgl-ctrl-group:first-child {
+        margin-top: calc(8vh + 10px);
     }
 }
