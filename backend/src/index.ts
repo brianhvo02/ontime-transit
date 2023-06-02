@@ -2,7 +2,6 @@ import { PORT, BING_MAPS_KEY, gtfsConfig } from './config.js';
 import express, { NextFunction, Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import { join } from 'path';
-// import TestRouter from './routes/test';
 import { ServerError } from './errors.js';
 import { gtfsLoader } from './middleware/gtfs.js';
 import { __dirname } from './utils.js';
@@ -70,5 +69,5 @@ app.use((err: ServerError, req: Request, res: Response, next: NextFunction) => {
 
 app.listen(PORT || 5000, () => {
     console.log(`App listening on port ${PORT || 5000}`);
-    // setInterval(() => updateGtfsRealtime(gtfsConfig), 60000);
+    setInterval(() => updateGtfsRealtime(gtfsConfig), 60000);
 })

@@ -4,16 +4,21 @@
     max-width: 15vw;
     border-radius: 100%;
 
-    padding: 2vh 1vw;
+    padding: 2vh 1vw 3vh;
 
+    display: flex;
+    flex-direction: column;
     text-align: right;
+    align-items: end;
+
+    svg {
+        align-self: flex-start;
+        cursor: pointer;
+        height: 2vh;
+    }
 
     h1, h2, h3, h4, p, a {
         color: $primary-color;
-    }
-
-    h2 {
-        margin-bottom: 1vh;
     }
 
     .agency-info {
@@ -21,13 +26,25 @@
             display: block;
             margin-top: 0.5em;
         }
+
+        ul {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1em;
+            text-align: center;
+            margin-top: 2em;
+
+            li {
+                cursor: pointer;
+            }
+        }
     }
 
     .vehicle-info {
         margin-top: 2em;
 
         div {
-            margin-top: 1em;
+            margin-top: 2em;
         }
     }
 }

@@ -1,6 +1,6 @@
 import { Request, Router } from 'express';
 import { ServerError, UnprocessableEntity, isError } from '../errors.js';
-import { advancedQuery, getAgencies, getRoutes, getShapesAsGeoJSON } from 'gtfs';
+import { SqlResults, advancedQuery, getAgencies, getRoutes, getShapesAsGeoJSON } from 'gtfs';
 import { area, bbox, bboxPolygon, convex, featureCollection, multiLineString } from '@turf/turf';
 import { FeatureCollection, MultiLineString, Position } from 'geojson';
 import { Route } from 'gtfs-types';
@@ -95,37 +95,32 @@ AgencyRouter.get('/:agency_id/vehicles', async (req, res, next) => {
     const { agency_id } = req.params;
 
     try {
-        const vehicles = advancedQuery('vehicle_positions', {
-            query: {
-                agency_id: `${agency_id}_${agency_id}`
-            },
-            fields: [
-                'update_id',
-                'bearing',
-                'latitude',
-                'longitude',
-                'speed',
-                'vehicle_id', 
-                'route_short_name', 
-                'route_long_name'
-            ],
-            join: [
-                {
-                    type: 'INNER',
-                    table: 'trips',
-                    on: `trips.trip_id = ('${agency_id}_' || vehicle_positions.trip_id)`,
-                },
-                {
-                    type: 'INNER',
-                    table: 'routes',
-                    on: 'routes.route_id = trips.route_id',
-                },
-            ],
-            orderBy: [['update_id', 'ASC']]
-        });
+        if (agency_id.length !== 2) 
+            throw new UnprocessableEntity('Agency not found');
+
+        const vehicles = req.db.prepare(`
+            SELECT *
+            FROM (
+                SELECT 
+                    bearing, latitude, longitude, speed, vehicle_positions.vehicle_id, 
+                    trip_headsign, route_short_name, route_long_name, route_color,
+                    departure_timestamp, arrival_timestamp, stop_name, stop_lat, stop_lon, stop_url
+                FROM vehicle_positions
+                JOIN trips ON trips.trip_id = ('${agency_id}_' || vehicle_positions.trip_id)
+                JOIN routes ON routes.route_id = trips.route_id
+                JOIN trip_updates ON trip_updates.trip_id = vehicle_positions.trip_id
+                JOIN stop_times_updates ON stop_times_updates.trip_id = vehicle_positions.trip_id
+                JOIN stops ON stops.stop_id = ('${agency_id}_' || stop_times_updates.stop_id)
+                WHERE agency_id = '${agency_id}_${agency_id}'
+                ORDER BY stop_times_updates.stop_sequence ASC
+            )
+            GROUP BY vehicle_id
+            ORDER BY vehicle_id
+            LIMIT 5;
+        `).all() as SqlResults;
 
         if (vehicles.length) {
-            res.json(vehicles.reduce((obj, vehicle) => ({ ...obj, [vehicle.update_id]: vehicle }), {}));
+            res.json(vehicles.reduce((obj, vehicle) => ({ ...obj, [vehicle.vehicle_id]: vehicle }), {}));
         } else {
             throw new UnprocessableEntity('Agency not found');
         }

@@ -2,7 +2,7 @@ import { Tile3DLayer } from '@deck.gl/geo-layers/typed';
 import { GeoJsonLayer } from '@deck.gl/layers/typed';
 import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
-import { faArrowPointer, faBuilding, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faArrowPointer, faBuilding, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { CesiumIonLoader } from '@loaders.gl/3d-tiles';
 import { skipToken } from '@reduxjs/toolkit/dist/query';
@@ -72,7 +72,7 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
     const [selectedAgency, setSelectedAgency] = useState<GTFSAgency | undefined>();
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
     const { data: vehicles } = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken
-        // , { pollingInterval: 60000 }
+        , { pollingInterval: 60000 }
     );
     const [hovered, setHovered] = useState<GTFSAgency | undefined>();
     const [showSatellite, setShowSatellite] = useState(false);
@@ -296,6 +296,7 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                             setSelectedAgency(undefined);
                             setStartSelection(false);
                             setHovered(undefined);
+                            setSelectedVehicle(undefined);
                             map.current?.fitBounds(new LngLatBounds(agenciesData?.bounds), { padding: 64, duration: 1000 })
                         } else {
                             setStartSelection(prev => !prev)
@@ -318,25 +319,72 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 startSelection &&
                 <CustomOverlay>
                     <div className='display'>
+                        {
+                            selectedVehicle &&
+                            <FontAwesomeIcon icon={faArrowLeft} onClick={() => {
+                                setSelectedVehicle(undefined);
+                                const box = agenciesData?.agencies.find(agency => agency.info.agency_id === selectedAgency?.agency_id)?.box.bbox as [number, number, number, number];
+                                if (box)
+                                    map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
+                            }} />
+                        }
                         <section className='agency-info'>
-                            <h1>{(hovered || selectedAgency)?.agency_name ?? 'Select an agency.'}</h1>
-                            <a href={(hovered || selectedAgency)?.agency_url} target='_blank' rel='noreferer'>{(hovered || selectedAgency)?.agency_url}</a>
+                            
+                            {
+                                selectedAgency ?
+                                <>
+                                    <h1>{selectedAgency.agency_name ?? 'Select an agency'}</h1>
+                                    <a href={selectedAgency.agency_url} target='_blank' rel='noreferer'>{selectedAgency.agency_url}</a>
+                                </>
+                                :
+                                <>
+                                    <h1 style={{ textAlign: 'center' }}>Select an agency</h1>
+                                    <ul>
+                                        {
+                                            agenciesData?.agencies.map(agency => 
+                                                <li 
+                                                    key={agency.info.agency_id}
+                                                    onMouseEnter={() => setHovered(agency.info)}
+                                                    onMouseLeave={() => setHovered(undefined)}
+                                                    onClick={() => {
+                                                        setSelectedAgency(agency.info);
+                                                        setHovered(undefined);
+                                                        map.current?.fitBounds(new LngLatBounds(agency.box.bbox as [number, number, number, number]), { padding: 64, duration: 1000 });
+                                                    }}
+                                                    style={{
+                                                        textDecoration: hovered?.agency_id === agency.info.agency_id ? 'underline' : 'none',
+                                                        fontWeight: hovered?.agency_id === agency.info.agency_id ? 'bold' : 'normal',
+                                                    }}
+                                                >{agency.info.agency_name}</li>    
+                                            )
+                                        }
+                                    </ul>
+                                </>
+                            }
                         </section>
                         {
                             selectedVehicle && 
                             <section className='vehicle-info'>
-                                <h2>Vehicle Info</h2>
                                 <div>
-                                    <h3>Route</h3>
-                                    <h3>{selectedVehicle.route_long_name} ({selectedVehicle.route_short_name})</h3>
-                                </div>
-                                <div>
-                                    <h4>Coordinates</h4>
-                                    <p>{selectedVehicle.latitude}, {selectedVehicle.longitude}</p>
+                                    <h2>{selectedVehicle.trip_headsign}</h2>
+                                    <p>{selectedVehicle.latitude.toFixed(3)}, {selectedVehicle.longitude.toFixed(3)}</p>
                                 </div>
                                 <div>
                                     <h4>Speed / Bearing</h4>
                                     <p>{Math.round(selectedVehicle.speed ?? 0)} mph / {selectedVehicle.bearing ?? 0}°</p>
+                                </div>
+                                <div>
+                                    <h4>Route</h4>
+                                    <h3 style={{ color: `#${selectedVehicle.route_color}` }}>{selectedVehicle.route_long_name} ({selectedVehicle.route_short_name})</h3>
+                                </div>
+                                <div>
+                                    <h4>Next Stop</h4>
+                                    <h3>{selectedVehicle.stop_name}</h3>
+                                    <p>{selectedVehicle.latitude.toFixed(3)}, {selectedVehicle.longitude.toFixed(3)}</p>
+                                    <h4>{(() => {
+                                        const time = selectedVehicle.departure_timestamp || selectedVehicle.arrival_timestamp;
+                                        return time ? `Estimated arrival time: ${new Date(time).toLocaleTimeString()}` : null;
+                                    })()}</h4>
                                 </div>
                             </section>
                         }
