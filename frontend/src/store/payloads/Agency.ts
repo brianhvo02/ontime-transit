@@ -1,4 +1,4 @@
-import { Agency as GTFSAgency, Route } from 'gtfs-types';
+import { Agency as GTFSAgency, Route, VehicleUpdate } from 'gtfs-types';
 import { Feature, FeatureCollection, Polygon } from 'geojson';
 
 export interface Agency extends GTFSAgency {
@@ -11,3 +11,16 @@ export interface Agencies {
     bounds: [number, number, number, number];
     routes: FeatureCollection<Polygon, Route>;
 }
+
+export interface Vehicle {
+    vehicle_id: string;
+    update_id: string;
+    latitude: number;
+    longitude: number;
+    bearing: number | null;
+    speed: number | null;
+    route_short_name: string;
+    route_long_name: string;
+}
+
+export interface VehiclePayload extends Map<string, Vehicle> {};

@@ -8,7 +8,7 @@ export const store = configureStore({
         [agencyApi.reducerPath]: agencyApi.reducer
     },
     middleware: getDefaultMiddleware =>
-        getDefaultMiddleware().concat(agencyApi.middleware)
+        getDefaultMiddleware({ serializableCheck: false }).concat(agencyApi.middleware)
 })
 
 export type RootState = ReturnType<typeof store.getState>;

@@ -1,0 +1,18 @@
+@import '../../variables';
+
+.display {
+    max-width: 15vw;
+    border-radius: 100%;
+
+    padding: 2vh 1vw;
+
+    text-align: right;
+
+    h2, p, a {
+        color: $primary-color;
+    }
+
+    h2 {
+        margin-bottom: 1vh;
+    }
+}

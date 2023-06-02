@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { Agency, Agencies } from '../payloads/Agency';
+import { Agency, Agencies, VehiclePayload } from '../payloads/Agency';
 
 const agencyApi = createApi({
     reducerPath: 'agencies',
@@ -17,8 +17,14 @@ const agencyApi = createApi({
                 method: 'GET'
             })
         }),
+        getVehicles: builder.query<VehiclePayload, string>({
+            query: agencyId => ({
+                url: `/${agencyId}/vehicles`,
+                method: 'GET'
+            })
+        })
     }),
 });
 
-export const { useGetAgenciesQuery, useGetAgencyQuery } = agencyApi;
+export const { useGetAgenciesQuery, useGetAgencyQuery, useGetVehiclesQuery } = agencyApi;
 export default agencyApi;

@@ -1,6 +1,6 @@
 import { Request, Router } from 'express';
 import { ServerError, UnprocessableEntity, isError } from '../errors.js';
-import { getAgencies, getRoutes, getShapesAsGeoJSON } from 'gtfs';
+import { advancedQuery, getAgencies, getRoutes, getShapesAsGeoJSON } from 'gtfs';
 import { area, bbox, bboxPolygon, convex, featureCollection, multiLineString } from '@turf/turf';
 import { FeatureCollection, MultiLineString, Position } from 'geojson';
 import { Route } from 'gtfs-types';
@@ -76,7 +76,7 @@ AgencyRouter.get('/', async (req, res, next) => {
     }
 });
 
-AgencyRouter.get('/:agency_id', async (req: Request<{ agency_id: string }>, res, next) => {
+AgencyRouter.get('/:agency_id', async (req, res, next) => {
     const { agency_id } = req.params;
 
     try {
@@ -91,6 +91,53 @@ AgencyRouter.get('/:agency_id', async (req: Request<{ agency_id: string }>, res,
     }
 });
 
+AgencyRouter.get('/:agency_id/vehicles', async (req, res, next) => {
+    const { agency_id } = req.params;
+
+    try {
+        const vehicles = advancedQuery('vehicle_positions', {
+            query: {
+                agency_id: `${agency_id}_${agency_id}`
+            },
+            fields: [
+                'update_id',
+                'bearing',
+                'latitude',
+                'longitude',
+                'speed',
+                'vehicle_id', 
+                'route_short_name', 
+                'route_long_name'
+            ],
+            join: [
+                {
+                    type: 'INNER',
+                    table: 'trips',
+                    on: `trips.trip_id = ('${agency_id}_' || vehicle_positions.trip_id)`,
+                },
+                {
+                    type: 'INNER',
+                    table: 'routes',
+                    on: 'routes.route_id = trips.route_id',
+                },
+            ],
+            orderBy: [['update_id', 'ASC']]
+        });
+
+        if (vehicles.length) {
+            res.json(vehicles.reduce((obj, vehicle) => ({ ...obj, [vehicle.update_id]: vehicle }), {}));
+        } else {
+            throw new UnprocessableEntity('Agency not found');
+        }
+    } catch (e) {
+        if (isError(e))
+            next(new ServerError(e.message));
+        else {
+            console.error(e);
+            next(new ServerError());
+        }
+    }
+});
 
 // AgencyRouter.get('/:agency_id/routes', async (req: Request<{ agency_id: string }>, res, next) => {
 //     const { agency_id } = req.params;

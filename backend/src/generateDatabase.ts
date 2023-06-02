@@ -5,8 +5,6 @@ import { join } from 'node:path';
 import { importGtfs } from 'gtfs';
 import { writeFile } from "node:fs/promises";
 import { __dirname } from "./utils.js";
-// @ts-ignore
-import gtfsToGeoJSON from 'gtfs-to-geojson';
 
 const api_key = process.env.SF_511_API_KEY_01;
 if (!api_key)
@@ -76,7 +74,15 @@ const sf511Fetch = async <ReturnType>(
             agency_key: Id,
             url: `https://api.511.org/transit/datafeeds?api_key=${process.env[`SF_511_API_KEY_${Id}`]}&operator_id=${Id}`,
             prefix: `${Id}_`,
-            exclude: ['attributions']
+            exclude: ['attributions'],
+            realtimeUrls: [
+                `https://api.511.org/transit/tripupdates?api_key=${process.env[`SF_511_API_KEY_${Id}`]}&agency=${Id}`,
+                `https://api.511.org/transit/vehiclepositions?api_key=${process.env[`SF_511_API_KEY_${Id}`]}&agency=${Id}`,
+                `https://api.511.org/transit/servicealerts?api_key=${process.env[`SF_511_API_KEY_${Id}`]}&agency=${Id}`
+            ],
+            csvOptions: {
+                skip_lines_with_error: true
+            }
         })),
         sqlitePath: join(__dirname, '../data.s3db'),
         ignoreDuplicates: true
@@ -84,16 +90,5 @@ const sf511Fetch = async <ReturnType>(
 
     await writeFile(join(__dirname, '../gtfsConfig.json'), JSON.stringify(gtfsConfig, null, 4));
     
-    // await importGtfs(gtfsConfig);
-    await gtfsToGeoJSON({
-        ...gtfsConfig,
-        outputFormat: 'envelope',
-        skipImport: true
-    });
-
-    await gtfsToGeoJSON({
-        ...gtfsConfig,
-        outputFormat: 'convex',
-        skipImport: true
-    });
+    await importGtfs(gtfsConfig);
 })();
