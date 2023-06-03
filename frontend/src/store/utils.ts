@@ -8,7 +8,6 @@ interface ApiError {
 const instanceOfApiError = (object: any): object is ApiError => 'error' in object;
 
 export const convertApiError = (error: FetchBaseQueryError | SerializedError | undefined) => {
-    console.log(error)
     if (error) {
         if ('status' in error) {
             if (error.data && typeof error.data === 'string' && error.data.includes('Proxy error')) 

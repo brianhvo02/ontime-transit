@@ -6,7 +6,6 @@ import { ServerError } from './errors.js';
 import { gtfsLoader } from './middleware/gtfs.js';
 import { __dirname } from './utils.js';
 import AgencyRouter from './routes/agencies.js';
-import RouteRouter from './routes/routes/index.js';
 import { updateGtfsRealtime } from 'gtfs';
 
 const app = express();
@@ -14,9 +13,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(gtfsLoader);
 
-// app.use('/api/test', TestRouter);
 app.use('/api/agencies', AgencyRouter);
-app.use('/api/routes', RouteRouter);
 
 app.get('/api/mapStyle', async (req, res) => {
     const resource = await fetch(`https://dev.virtualearth.net/REST/v1/Imagery/Metadata/Aerial?key=${BING_MAPS_KEY}`)
@@ -67,7 +64,7 @@ app.use((err: ServerError, req: Request, res: Response, next: NextFunction) => {
     res.status(err.statusCode).json({ error: err.message });
 });
 
-app.listen(PORT || 5000, () => {
+app.listen(PORT || 5000, async () => {
     console.log(`App listening on port ${PORT || 5000}`);
-    setInterval(() => updateGtfsRealtime(gtfsConfig), 60000);
+    setInterval(() => updateGtfsRealtime(gtfsConfig).catch(console.error), 60000);
 })

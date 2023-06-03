@@ -24,7 +24,6 @@ import HomeMap from './Map';
 // }
 
 const HomePage = () => {
-    const agencies = useGetAgenciesQuery();
     // const [selectedAgency, setSelectedAgency] = useState<string | undefined>();
     // const { data, isLoading, isSuccess, isError, error } = useSendTestQuery({ test: true });
     // const { test } = data || {};
@@ -51,16 +50,7 @@ const HomePage = () => {
 
     return (
         <div className='homepage'>
-            {
-                agencies.isLoading &&
-                <Modal>
-                    <Loading />
-                </Modal>
-            }
-            {
-                agencies.isSuccess &&
-                <HomeMap agenciesData={agencies.data} />
-            }
+            <HomeMap />
         </div>
     );
 }

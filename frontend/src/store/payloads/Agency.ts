@@ -1,16 +1,16 @@
-import { Agency as GTFSAgency, Route, VehicleUpdate } from 'gtfs-types';
-import { Feature, FeatureCollection, Polygon } from 'geojson';
+import { Agency as GTFSAgency, Route, Stop as GTFSStop, Stop} from 'gtfs-types';
+import { Feature, MultiLineString, Polygon } from 'geojson';
 
 export interface Agency {
     box: Feature<Polygon, GTFSAgency>;
     area: Feature<Polygon, GTFSAgency>;
     info: GTFSAgency;
+    routes: { [key: string]: Feature<MultiLineString, Route> };
 }
 
 export interface Agencies {
-    agencies: Agency[];
+    agencies: { [key: string]: Agency; };
     bounds: [number, number, number, number];
-    routes: FeatureCollection<Polygon, Route>;
 }
 
 export interface Vehicle {
@@ -20,15 +20,17 @@ export interface Vehicle {
     bearing: number | null;
     speed: number | null;
     trip_headsign: string;
+    route_id: string;
     route_short_name: string;
     route_long_name: string;
     route_color: string;
-    departure_timestamp: string | null;
-    arrival_timestamp: string | null;
-    stop_name: string;
-    stop_lat: number;
-    stop_lon: number;
-    stop_url: string;
+    route_url: string;
+    stops: {
+        id: string;
+        timestamp?: string;
+    }[];
 }
 
-export interface VehiclePayload extends Map<string, Vehicle> {};
+export interface VehiclePayload { [key: string]: Vehicle };
+
+export interface StopPayload { [key: string]: Stop };

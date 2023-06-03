@@ -2,23 +2,28 @@ import { Tile3DLayer } from '@deck.gl/geo-layers/typed';
 import { GeoJsonLayer } from '@deck.gl/layers/typed';
 import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
-import { faArrowLeft, faArrowPointer, faBuilding, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faArrowPointer, faBuilding, faFlask, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { CesiumIonLoader } from '@loaders.gl/3d-tiles';
 import { skipToken } from '@reduxjs/toolkit/dist/query';
 import { area, bbox } from '@turf/turf';
 import { Feature, Polygon } from 'geojson';
-import { Agency as GTFSAgency } from 'gtfs-types';
+import { Agency as GTFSAgency, LocationType, Stop } from 'gtfs-types';
 import { LngLatBounds } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Map, { AttributionControl, FullscreenControl, GeolocateControl, Layer, MapRef, NavigationControl, SkyLayer, Source, useControl } from 'react-map-gl';
-import { useGetVehiclesQuery } from '../../store/api/agency';
-import { Agencies, Vehicle } from '../../store/payloads/Agency';
-import { hexToRGB } from '../../store/utils';
+import { useGetAgenciesQuery, useGetStopsQuery, useGetVehiclesQuery } from '../../store/api/agency';
+import { Vehicle } from '../../store/payloads/Agency';
+import { convertApiError, hexToRGB } from '../../store/utils';
 import CustomOverlay from '../SatelliteControl';
 import './Map.scss';
+import { createPortal } from 'react-dom';
+import Modal from '../Modal';
+import Loading from '../Modal/Loading';
+import _ from 'lodash';
+import { useLocation, useParams } from 'react-router-dom';
 
 const DeckGLOverlay = (props: MapboxOverlayProps & {
     interleaved?: boolean;
@@ -65,22 +70,58 @@ const skyLayer: SkyLayer = {
     }
 };
 
-const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
+const HomeMap = () => {
+    const { agencyId, vehicleId, stopId } = useParams();
+    const agenciesData = useGetAgenciesQuery();
     const map = useRef<MapRef>(null);
     const [cursor, setCursor] = useState(false);
     const [startSelection, setStartSelection] = useState(false);
     const [selectedAgency, setSelectedAgency] = useState<GTFSAgency | undefined>();
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
-    const { data: vehicles } = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken
-        , { pollingInterval: 60000 }
-    );
+    const [selectedStop, setSelectedStop] = useState<Stop | undefined>();
+    const vehicleData = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken, { pollingInterval: 60000 });
+    const stopData = useGetStopsQuery(selectedAgency?.agency_id ?? skipToken);
     const [hovered, setHovered] = useState<GTFSAgency | undefined>();
     const [showSatellite, setShowSatellite] = useState(false);
     const [showTerrain, setShowTerrain] = useState(false);
     const [show3D, setShow3D] = useState(false);
-    //[-123.0543893911,36.97474289,-120.94846,39.09982]
+    const [showExperimental, setShowExperimental] = useState(false)
 
-    const convexes = useMemo(() => agenciesData?.agencies.map(agency => agency.area).filter(area => area).sort((a, b) => area(b) - area(a)), [agenciesData]);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        if (!agencyId && !loaded) setLoaded(true);
+        if (agencyId && agenciesData.data) {
+            if (!loaded) {
+                const agency = agenciesData.data.agencies[agencyId]?.info;
+                if (agency) {
+                    setSelectedAgency(agency);
+                    setStartSelection(true);
+                }
+            }
+
+            if (vehicleId) {
+                if (vehicleData.data && !loaded) {
+                    const vehicle = vehicleData.data[vehicleId];
+                    if (vehicle) setSelectedVehicle(vehicle);
+
+                    if (stopId) {
+                        if (stopData.data && !loaded) {
+                            const stop = stopData.data[stopId];
+                            if (stop) setSelectedStop(stop);
+                            setLoaded(true);
+                        }
+                    } else {
+                        setLoaded(true);
+                    }
+                }
+            } else {
+                setLoaded(true);
+            }
+        }
+    }, [agencyId, vehicleId, stopId, agenciesData, vehicleData, stopData]);
+
+    const convexes = useMemo(() => agenciesData.data ? Object.values(agenciesData.data.agencies).map(agency => agency.area).filter(area => area).sort((a, b) => area(b) - area(a)) : undefined, [agenciesData.data]);
 
     const [tilesetUrl, setTilesetUrl] = useState<string | undefined>();
     const [satelliteUrls, setSatelliteUrls] = useState<string[]>([]);
@@ -100,6 +141,25 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
         //         setSatelliteUrls(urls);
         //     });
     }, []);
+
+    useEffect(() => {
+        if (map.current && vehicleData.isSuccess && selectedVehicle) {
+            const vehicle = vehicleData.data[selectedVehicle.vehicle_id]
+            if (!vehicle) setSelectedVehicle(undefined)
+            else if (!_.isEqual(vehicle, selectedVehicle)) {
+                setSelectedVehicle(vehicle);
+                if (!selectedStop) {
+                    map.current.flyTo({ 
+                        center: [vehicle.longitude, vehicle.latitude],
+                        bearing: vehicle.bearing ?? 0,
+                        pitch: 75,
+                        zoom: 17,
+                        duration: 1000,
+                    });
+                }
+            }
+        }
+    }, [vehicleData, selectedVehicle, map, selectedStop]);
 
     // const terrainLayer = new TerrainLayer({
     //     id: 'terrain',
@@ -161,12 +221,22 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
         // extensions
     });
 
+    const routes = useMemo(() => 
+        agenciesData.data && (
+            (hovered || selectedAgency) 
+                ? selectedVehicle 
+                    ? [agenciesData.data.agencies[selectedAgency?.agency_id || hovered?.agency_id || ''].routes[selectedVehicle.route_id]]
+                    : Object.values(agenciesData.data.agencies[selectedAgency?.agency_id || hovered?.agency_id || ''].routes ?? {}) 
+                : Object.values(agenciesData.data.agencies).map(agency => Object.values(agency.routes)).flat()
+        ), [agenciesData, hovered, selectedAgency, selectedVehicle]
+    );
+
     const routesLayer = new GeoJsonLayer({
         id: 'routes',
-        data: agenciesData?.routes,
+        data: routes,
         pickable: true,
         lineWidthUnits: 'pixels',
-        getLineColor: ({ properties }) => [...(hexToRGB(properties?.route_color ?? '') ?? [245, 245, 245]), selectedAgency ? selectedAgency.agency_id === properties?.agency_id ? 255 : 0 : hovered ? hovered.agency_id === properties?.agency_id ? 255 : 0 : 255],
+        getLineColor: ({ properties }) => hexToRGB(properties?.route_color ?? '') ?? [254, 135, 20],
         getLineWidth: 2,
         updateTriggers: {
             getLineColor: [hovered, selectedAgency]
@@ -176,12 +246,11 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
 
     const vehiclesLayer = new ScenegraphLayer({
         id: 'vehicles',
-        data: vehicles ? Object.values(vehicles): undefined,
+        data: (selectedVehicle && vehicleData.data) ? [vehicleData.data[selectedVehicle.vehicle_id]] : (selectedAgency && vehicleData.data) ? Object.values(vehicleData.data): undefined,
         pickable: true,
         // sizeScale: 0.1,
         scenegraph: '/bus.glb',
         sizeMaxPixels: 1,
-        sizeMinPixels: 0.1,
         // _animations: {
         //     '*': { speed: 1 }
         // },
@@ -199,17 +268,18 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
         //     getPosition: 60000
         // },
         updateTriggers: {
-            getPosition: vehicles,
-            getOrientation: vehicles
+            getPosition: vehicleData,
+            getOrientation: vehicleData
         },
         onClick: pickingInfo => {
             const vehicle: Vehicle = pickingInfo.object;
+            setSelectedStop(undefined);
             setSelectedVehicle(vehicle);
             if (vehicle) 
                 map.current?.flyTo({ 
                     center: [vehicle.longitude, vehicle.latitude],
-                    bearing: (vehicle.bearing ?? 0) - 90,
-                    pitch: 65,
+                    bearing: vehicle.bearing ?? 0,
+                    pitch: 75,
                     zoom: 17,
                     duration: 1000,
                 });
@@ -217,10 +287,85 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
         // extensions
     });
 
+    const selectedVehicleStops = useMemo(() => (selectedVehicle && stopData.data) ? selectedVehicle.stops.map(({ id, timestamp }) => ({ ...stopData.data?.[id], timestamp })) : undefined, [selectedVehicle, stopData]);
+
+    const stopsLayer = new ScenegraphLayer({
+        id: 'stops',
+        data: selectedVehicleStops,
+        pickable: true,
+        sizeScale: 10,
+        sizeMaxPixels: 20,
+        scenegraph: '/bus_stop.glb',
+        // sizeMaxPixels: 1,
+        // sizeMinPixels: 0.1,
+        // dataTransform: (data, prev) => {
+        //     console.log(data, prev)
+        //     return prev;
+        // },
+        onClick: pickingInfo => {
+            const stop: Stop = pickingInfo.object;
+            setSelectedStop(stop);
+            if (stop) 
+                map.current?.flyTo({ 
+                    center: [stop.stop_lon ?? 0, stop.stop_lat ?? 0],
+                    pitch: 75,
+                    zoom: 17,
+                    duration: 1000,
+                });
+        },
+        getPosition: (stop: Stop) => [
+            stop.stop_lon || 0,
+            stop.stop_lat || 0,
+        ],
+        getOrientation: [0, -(selectedVehicle?.bearing ?? map.current?.getBearing() ?? 0), 90],
+        // getTranslation: [0, 0, 20],
+        _lighting: 'pbr',
+        updateTriggers: {
+            getOrientation: selectedVehicle
+        },
+        // extensions
+    });
+
+    if (agenciesData.isLoading || !loaded) return (
+        <Modal>
+            <Loading />
+        </Modal>
+    );
+
+    if (agenciesData.isError) return (
+        <Modal>
+            <h2>Error: {convertApiError(agenciesData.error)}</h2>
+        </Modal>
+    )
+
     return (
         <Map
             ref={map}
-            initialViewState={{ bounds: new LngLatBounds(agenciesData?.bounds), fitBoundsOptions: { padding: 64 } }}
+            initialViewState={(() => {
+                const coordinates = (
+                    selectedStop
+                        ? [selectedStop.stop_lon ?? 0, selectedStop.stop_lat ?? 0]
+                        : selectedVehicle
+                            ? [selectedVehicle.longitude, selectedVehicle.latitude]
+                            : null
+                );
+
+                if (coordinates)  {
+                    return { 
+                        longitude: coordinates[0],
+                        latitude: coordinates[1],
+                        bearing: selectedVehicle?.bearing ?? 0,
+                        pitch: 75,
+                        zoom: 17
+                    };
+                } else {
+                    const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
+                    return {
+                         bounds: selectedAgency ? box : new LngLatBounds(agenciesData.data?.bounds), 
+                         fitBoundsOptions: { padding: 64 } 
+                    };
+                }
+            })()}
             maxPitch={85}
             mapStyle={showSatellite ? '/api/mapStyle' : 'mapbox://styles/mapbox/dark-v11'}
             style={{
@@ -236,6 +381,15 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
             terrain={showTerrain ? { source: 'mapbox-dem' } : undefined}
             maxZoom={19}
         >
+            {
+                vehicleData.isLoading &&
+                createPortal(
+                    <Modal>
+                        <Loading />
+                    </Modal>,
+                    document.body
+                )
+            }
             <Source
                 id='mapbox-dem'
                 type='raster-dem'
@@ -243,7 +397,10 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 tileSize={512}
                 maxzoom={14}
             />
-            <Layer {...skyLayer} />
+            {
+                showSatellite &&
+                <Layer {...skyLayer} />
+            }
             <NavigationControl position='top-left' />
             <GeolocateControl position='top-left' />
             <FullscreenControl position='top-left' />
@@ -261,34 +418,6 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                     />
                 </button>
             </CustomOverlay>
-            <CustomOverlay>
-                <button type='button' aria-label='Toggle terrain view' onClick={() => setShowTerrain(prev => !prev)}>
-                    <span 
-                        className='mapboxgl-ctrl-icon' 
-                        aria-hidden='true' 
-                        title='Toggle terrain view'
-                        style={{
-                            backgroundImage: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderToStaticMarkup(
-                                <FontAwesomeIcon icon={faMountain} color='#333' fixedWidth transform='shrink-3' />
-                            ))}')`
-                        }}
-                    />
-                </button>
-            </CustomOverlay>
-            <CustomOverlay>
-                <button type='button' aria-label='Toggle 3D buildings' onClick={() => setShow3D(prev => !prev)}>
-                    <span 
-                        className='mapboxgl-ctrl-icon' 
-                        aria-hidden='true' 
-                        title='Toggle 3D buildings'
-                        style={{
-                            backgroundImage: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderToStaticMarkup(
-                                <FontAwesomeIcon icon={faBuilding} color='#333' fixedWidth transform='shrink-3' />
-                            ))}')`
-                        }}
-                    />
-                </button>
-            </CustomOverlay>
             {
                 <CustomOverlay>
                     <button type='button' aria-label={selectedAgency ? 'Start over' : startSelection ? 'Move the map' : 'Select an agency'} onClick={() => {
@@ -297,7 +426,8 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                             setStartSelection(false);
                             setHovered(undefined);
                             setSelectedVehicle(undefined);
-                            map.current?.fitBounds(new LngLatBounds(agenciesData?.bounds), { padding: 64, duration: 1000 })
+                            setSelectedStop(undefined);
+                            map.current?.fitBounds(new LngLatBounds(agenciesData.data?.bounds), { padding: 64, duration: 1000 })
                         } else {
                             setStartSelection(prev => !prev)
                         }
@@ -320,12 +450,27 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                 <CustomOverlay>
                     <div className='display'>
                         {
-                            selectedVehicle &&
+                            (selectedVehicle || selectedStop) &&
                             <FontAwesomeIcon icon={faArrowLeft} onClick={() => {
-                                setSelectedVehicle(undefined);
-                                const box = agenciesData?.agencies.find(agency => agency.info.agency_id === selectedAgency?.agency_id)?.box.bbox as [number, number, number, number];
-                                if (box)
-                                    map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
+                                if (selectedStop) {
+                                    setSelectedStop(undefined);
+                                    if (selectedVehicle) {
+                                        map.current?.flyTo({ 
+                                            center: [selectedVehicle.longitude, selectedVehicle.latitude],
+                                            bearing: selectedVehicle.bearing ?? 0,
+                                            pitch: 75,
+                                            zoom: 17,
+                                            duration: 1000,
+                                        });
+                                    } else {
+
+                                    }
+                                } else if (selectedVehicle) {
+                                    setSelectedVehicle(undefined);
+                                    const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
+                                    if (box)
+                                        map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
+                                }
                             }} />
                         }
                         <section className='agency-info'>
@@ -333,15 +478,17 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                             {
                                 selectedAgency ?
                                 <>
-                                    <h1>{selectedAgency.agency_name ?? 'Select an agency'}</h1>
+                                    <h1>{selectedAgency.agency_name}</h1>
                                     <a href={selectedAgency.agency_url} target='_blank' rel='noreferer'>{selectedAgency.agency_url}</a>
+                                    <p>{ (vehicleData.data && vehicleData.isSuccess) ? `There are currently ${Object.keys(vehicleData.data).length} vehicles.` : 'Vehicle data is currently not available for this agency.' }</p>
                                 </>
                                 :
                                 <>
                                     <h1 style={{ textAlign: 'center' }}>Select an agency</h1>
                                     <ul>
                                         {
-                                            agenciesData?.agencies.map(agency => 
+                                            agenciesData.data && 
+                                            Object.values(agenciesData.data.agencies).map(agency => 
                                                 <li 
                                                     key={agency.info.agency_id}
                                                     onMouseEnter={() => setHovered(agency.info)}
@@ -363,10 +510,10 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                             }
                         </section>
                         {
-                            selectedVehicle && 
+                            selectedVehicle && !selectedStop && 
                             <section className='vehicle-info'>
                                 <div>
-                                    <h2>{selectedVehicle.trip_headsign}</h2>
+                                    <h2>{selectedVehicle.trip_headsign} ({selectedVehicle.vehicle_id})</h2>
                                     <p>{selectedVehicle.latitude.toFixed(3)}, {selectedVehicle.longitude.toFixed(3)}</p>
                                 </div>
                                 <div>
@@ -376,13 +523,31 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                                 <div>
                                     <h4>Route</h4>
                                     <h3 style={{ color: `#${selectedVehicle.route_color}` }}>{selectedVehicle.route_long_name} ({selectedVehicle.route_short_name})</h3>
+                                    <a href={selectedVehicle.route_url} target='_blank' rel='noreferer'>{selectedVehicle.route_url}</a>
                                 </div>
+                                {
+                                    selectedVehicleStops &&
+                                    <div>
+                                        <h4>Next Stop</h4>
+                                        <h3>{selectedVehicleStops[0]?.stop_name}</h3>
+                                        <p>{selectedVehicleStops[0]?.stop_lat?.toFixed(3)}, {selectedVehicleStops[0]?.stop_lon?.toFixed(3)}</p>
+                                        <h4>{(() => {
+                                            const time = selectedVehicleStops[0]?.timestamp;
+                                            return time ? `Estimated arrival time: ${new Date(time).toLocaleTimeString()}` : null;
+                                        })()}</h4>
+                                    </div>
+                                }
+                            </section>
+                        }
+                        {
+                            selectedStop && 
+                            <section className='vehicle-info'>
                                 <div>
-                                    <h4>Next Stop</h4>
-                                    <h3>{selectedVehicle.stop_name}</h3>
-                                    <p>{selectedVehicle.latitude.toFixed(3)}, {selectedVehicle.longitude.toFixed(3)}</p>
+                                    <h2>{selectedStop.stop_name} ({selectedStop.stop_id})</h2>
+                                    <p>{selectedStop.stop_lat?.toFixed(3)}, {selectedStop.stop_lon?.toFixed(3)}</p>
+                                    <a href={selectedStop.stop_url} target='_blank' rel='noreferer'>{selectedStop.stop_url}</a>
                                     <h4>{(() => {
-                                        const time = selectedVehicle.departure_timestamp || selectedVehicle.arrival_timestamp;
+                                        const time = selectedVehicle?.stops.find(stop => stop.id === selectedStop.stop_id)?.timestamp;
                                         return time ? `Estimated arrival time: ${new Date(time).toLocaleTimeString()}` : null;
                                     })()}</h4>
                                 </div>
@@ -391,14 +556,86 @@ const HomeMap = ({ agenciesData }: { agenciesData: Agencies | undefined }) => {
                     </div>
                 </CustomOverlay>
             }
+            {
+                !startSelection &&
+                <CustomOverlay>
+                    <button type='button' aria-label='Show experimental controls' onClick={() => {
+                        if (showExperimental) {
+                            setShowTerrain(false);
+                            setShow3D(false);
+                        }
+                        setShowExperimental(prev => !prev);
+                    }}>
+                        <span 
+                            className='mapboxgl-ctrl-icon' 
+                            aria-hidden='true' 
+                            title='Show experimental controls'
+                            style={{
+                                backgroundImage: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderToStaticMarkup(
+                                    <FontAwesomeIcon icon={faFlask} color='#333' fixedWidth transform='shrink-3' />
+                                ))}')`
+                            }}
+                        />
+                    </button>
+                </CustomOverlay>
+            }
+            {
+                showExperimental &&
+                <>
+                    <CustomOverlay>
+                        <button type='button' aria-label='Toggle terrain view' onClick={() => setShowTerrain(prev => !prev)}>
+                            <span 
+                                className='mapboxgl-ctrl-icon' 
+                                aria-hidden='true' 
+                                title='Toggle terrain view'
+                                style={{
+                                    backgroundImage: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderToStaticMarkup(
+                                        <FontAwesomeIcon icon={faMountain} color='#333' fixedWidth transform='shrink-3' />
+                                    ))}')`
+                                }}
+                            />
+                        </button>
+                    </CustomOverlay>
+                    <CustomOverlay>
+                        <button type='button' aria-label='Toggle 3D buildings' onClick={() => setShow3D(prev => !prev)}>
+                            <span 
+                                className='mapboxgl-ctrl-icon' 
+                                aria-hidden='true' 
+                                title='Toggle 3D buildings'
+                                style={{
+                                    backgroundImage: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderToStaticMarkup(
+                                        <FontAwesomeIcon icon={faBuilding} color='#333' fixedWidth transform='shrink-3' />
+                                    ))}')`
+                                }}
+                            />
+                        </button>
+                    </CustomOverlay>
+                </>
+            }
             <AttributionControl customAttribution='Transit data from 511 SF Bay' />
             <DeckGLOverlay
+                getTooltip={({object}) => {
+                    if (!object || object.type === 'Feature') return null;
+                    if (object.vehicle_id && !selectedVehicle) return (
+`${object.trip_headsign} (${object.vehicle_id})
+${object.route_short_name} - ${object.route_long_name}
+
+${object.latitude.toFixed(3)}, ${object.longitude.toFixed(3)}`
+                    );
+                    if (object.stop_id) return (
+`${object.stop_name}
+
+${object.stop_lat.toFixed(3)}, ${object.stop_lon.toFixed(3)}`
+                    )
+                    return null;
+                }}
                 layers={[
                     // terrainLayer,
                     layer3d,
                     routesLayer,
                     agenciesLayer,
                     vehiclesLayer,
+                    stopsLayer,
                 ]}
             />
         </Map>

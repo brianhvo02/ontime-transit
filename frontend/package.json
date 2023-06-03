@@ -13,6 +13,7 @@
     "@types/geojson": "^7946.0.10",
     "deck.gl": "^8.9.17",
     "gtfs-types": "^2.2.0",
+    "lodash": "^4.17.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-map-gl": "^7.0.25",
@@ -46,6 +47,7 @@
     ]
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.195",
     "@types/node": "^16.18.32",
     "@types/react": "^18.2.6",
     "@types/react-dom": "^18.2.4",
