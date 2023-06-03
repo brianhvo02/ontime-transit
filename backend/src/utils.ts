@@ -12,3 +12,6 @@ export const groups = <Type>(arr: Type[], num = 10) => arr.reduce((arr: Type[][]
 }, [[]]);
 
 export const camelizeRecord = (record: Record<string, any>): Record<string, any> => Object.keys(record).reduce((obj, key) => ({ ...obj, [_.camelCase(key)]: record[key] }), {});
+
+export const removePrefix = (id: string) => id.slice(id.indexOf('_') + 1);
+export const getPrefix = (id: string) => id.slice(0, id.indexOf('_'));

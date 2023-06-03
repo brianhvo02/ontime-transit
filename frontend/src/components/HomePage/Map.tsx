@@ -2,7 +2,7 @@ import { Tile3DLayer } from '@deck.gl/geo-layers/typed';
 import { GeoJsonLayer } from '@deck.gl/layers/typed';
 import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
-import { faArrowLeft, faArrowPointer, faBuilding, faFlask, faHandPointer, faMap, faMountain, faSatellite, faX } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faArrowPointer, faBuilding, faFlask, faHandPointer, faMap, faMountain, faSatellite, faShareFromSquare, faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { CesiumIonLoader } from '@loaders.gl/3d-tiles';
 import { skipToken } from '@reduxjs/toolkit/dist/query';
@@ -123,6 +123,7 @@ const HomeMap = () => {
 
     const convexes = useMemo(() => agenciesData.data ? Object.values(agenciesData.data.agencies).map(agency => agency.area).filter(area => area).sort((a, b) => area(b) - area(a)) : undefined, [agenciesData.data]);
 
+    const [shareLink, setShareLink] = useState<string | undefined>();
     const [tilesetUrl, setTilesetUrl] = useState<string | undefined>();
     const [satelliteUrls, setSatelliteUrls] = useState<string[]>([]);
 
@@ -336,7 +337,25 @@ const HomeMap = () => {
         <Modal>
             <h2>Error: {convertApiError(agenciesData.error)}</h2>
         </Modal>
-    )
+    );
+
+    const shareHandler = () => {
+        let link = window.location.origin;
+        if (selectedAgency?.agency_id) {
+            link += `/agencies/${selectedAgency.agency_id}`;
+
+            if (selectedVehicle) {
+                link += `/vehicles/${selectedVehicle.vehicle_id}`;
+
+                if (selectedStop) {
+                    link += `/stops/${selectedStop.stop_id}`;
+                }
+            }
+        }
+
+        navigator.clipboard.writeText(link);
+        setShareLink(link);
+    }
 
     return (
         <Map
@@ -386,6 +405,18 @@ const HomeMap = () => {
                 createPortal(
                     <Modal>
                         <Loading />
+                    </Modal>,
+                    document.body
+                )
+            }
+            {
+                shareLink &&
+                createPortal(
+                    <Modal closeModal={() => setShareLink(undefined)}>
+                        <div className='share-link'>
+                            <h2>Link copied to clipboard!</h2>
+                            <input onClick={e => e.currentTarget.select()} value={shareLink} readOnly />
+                        </div>
                     </Modal>,
                     document.body
                 )
@@ -450,28 +481,33 @@ const HomeMap = () => {
                 <CustomOverlay>
                     <div className='display'>
                         {
-                            (selectedVehicle || selectedStop) &&
-                            <FontAwesomeIcon icon={faArrowLeft} onClick={() => {
-                                if (selectedStop) {
-                                    setSelectedStop(undefined);
-                                    if (selectedVehicle) {
-                                        map.current?.flyTo({ 
-                                            center: [selectedVehicle.longitude, selectedVehicle.latitude],
-                                            bearing: selectedVehicle.bearing ?? 0,
-                                            pitch: 75,
-                                            zoom: 17,
-                                            duration: 1000,
-                                        });
-                                    } else {
+                            (selectedVehicle || selectedStop) ?
+                                <nav>
+                                    <FontAwesomeIcon icon={faArrowLeft} onClick={() => {
+                                        if (selectedStop) {
+                                            setSelectedStop(undefined);
+                                            if (selectedVehicle) {
+                                                map.current?.flyTo({ 
+                                                    center: [selectedVehicle.longitude, selectedVehicle.latitude],
+                                                    bearing: selectedVehicle.bearing ?? 0,
+                                                    pitch: 75,
+                                                    zoom: 17,
+                                                    duration: 1000,
+                                                });
+                                            } else {
 
-                                    }
-                                } else if (selectedVehicle) {
-                                    setSelectedVehicle(undefined);
-                                    const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
-                                    if (box)
-                                        map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
-                                }
-                            }} />
+                                            }
+                                        } else if (selectedVehicle) {
+                                            setSelectedVehicle(undefined);
+                                            const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
+                                            if (box)
+                                                map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
+                                        }
+                                    }} />
+                                    <FontAwesomeIcon icon={faShareFromSquare} onClick={shareHandler} />
+                                </nav>
+                            : selectedAgency &&
+                            <FontAwesomeIcon icon={faShareFromSquare} onClick={shareHandler} />
                         }
                         <section className='agency-info'>
                             

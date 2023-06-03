@@ -4,6 +4,7 @@ import { SqlResults, getAgencies, getRoutes, getShapesAsGeoJSON, getStops } from
 import { area, bbox, bboxPolygon, convex, featureCollection, multiLineString } from '@turf/turf';
 import { FeatureCollection, Feature, MultiLineString, Position } from 'geojson';
 import { Route } from 'gtfs-types';
+import { getPrefix, removePrefix } from '../utils.js';
 
 const AgencyRouter = Router();
 
@@ -13,7 +14,7 @@ const getAgencyInfo = async (agency_id: string | undefined = undefined) => {
     if (!results.length) throw new UnprocessableEntity('Agency not found.');
 
     const agencies = results.reduce((obj, agency) => {
-        const agency_id = agency.agency_id.slice(0, agency.agency_id.indexOf('_'))
+        const agency_id = getPrefix(agency.agency_id);
         const info = { 
             ...agency, 
             agency_id
@@ -22,12 +23,14 @@ const getAgencyInfo = async (agency_id: string | undefined = undefined) => {
         const routes = getRoutes({
             agency_id: agency.agency_id
         }).reduce((obj, route) => {
-            obj[route.route_id] =  multiLineString(
+            const route_id = removePrefix(route.route_id);
+            obj[route_id] = multiLineString(
                 getShapesAsGeoJSON({ route_id: route.route_id })
                     .features
                     .map(feature => feature.geometry.coordinates as Position[]), {
                         ...route, 
-                        agency_id: agency.agency_id.slice(0, agency.agency_id.indexOf('_')) 
+                        agency_id: getPrefix(agency.agency_id),
+                        route_id
                     } as Route
             );
             return obj;
@@ -135,7 +138,8 @@ AgencyRouter.get('/:agency_id/vehicles', async (req, res, next) => {
                 const vehiclePayload = { 
                     ...obj, 
                     [vehicle.vehicle_id]: {
-                        ...vehicle, 
+                        ...vehicle,
+                        route_id: removePrefix(vehicle.route_id),
                         stops
                     } 
                 };
@@ -163,7 +167,7 @@ AgencyRouter.get('/:agency_id/stops', async (req, res, next) => {
 
         if (stops.length) {
             res.json(stops.reduce((obj, stop) => {
-                const stop_id = stop.stop_id.slice(stop.stop_id.indexOf('_') + 1);
+                const stop_id = removePrefix(stop.stop_id);
 
                 return { 
                     ...obj, 

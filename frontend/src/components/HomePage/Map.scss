@@ -11,10 +11,18 @@
     text-align: right;
     align-items: end;
 
+    nav {
+        width: 100%;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
     svg {
-        align-self: flex-start;
         cursor: pointer;
         height: 2vh;
+        margin-bottom: 1em;
     }
 
     h1, h2, h3, h4, p, a {
@@ -58,5 +66,13 @@
 .mapboxgl-ctrl-top-right {
     .mapboxgl-ctrl-group:first-child {
         margin-top: calc(8vh + 10px);
+    }
+}
+
+.share-link {
+    input {
+        width: 100%;
+        font-family: inherit;
+        margin-top: 1em;
     }
 }
