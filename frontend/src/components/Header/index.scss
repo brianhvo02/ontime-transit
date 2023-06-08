@@ -5,7 +5,7 @@ header {
     z-index: 5;
 
     background-color: rgba($dark-color, 0.5);
-    height: 8vh;
+    height: 8rem;
     width: 100vw;
 
     display: flex;
@@ -13,25 +13,25 @@ header {
     justify-content: space-between;
 
     .header-left, .header-center, .header-right {
-        margin: 1.5vh 1.5vw;
+        margin: 1.5rem 1.5rem;
 
         svg {
-            height: 3vh;
+            height: 2rem;
             cursor: pointer;
             transition: 0.2s;
         }
     }
     
     .header-center {
-        line-height: 3vh;
+        line-height: 3rem;
         text-align: center;
 
         display: flex;
         align-items: center;
 
         svg {
-            height: 5vh;
-            margin: 0 1vw;
+            height: 4rem;
+            margin: 0 1rem;
         }
     }
     

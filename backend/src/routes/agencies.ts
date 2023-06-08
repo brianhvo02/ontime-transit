@@ -19,7 +19,6 @@ const getAgencyInfo = async (agency_id: string | undefined = undefined) => {
             ...agency, 
             agency_id
         };
-
         const routes = getRoutes({
             agency_id: agency.agency_id
         }).reduce((obj, route) => {
@@ -163,7 +162,26 @@ AgencyRouter.get('/:agency_id/stops', async (req, res, next) => {
     const { agency_id } = req.params;
 
     try {
-        const stops = req.db.prepare('SELECT * FROM stops WHERE stop_id LIKE ?').all(`${agency_id}_%`) as SqlResults;
+        // const stops = req.db.prepare('SELECT * FROM stops WHERE stop_id LIKE ?').all(`${agency_id}_%`) as SqlResults;
+
+        /*
+        group_concat(arrival_timestamp) AS arrival_timestamps, 
+        group_concat(departure_timestamp) AS departure_timestamps
+        */
+        const stops = req.db.prepare(
+`SELECT 
+    stop_id, stop_name, stop_lat, stop_lon, stop_url,
+    group_concat(route_id) AS route_ids
+FROM (
+    SELECT DISTINCT stops.stop_id, stop_name, stop_lat, stop_lon, stop_url, route_id
+    FROM stop_times 
+    JOIN stops ON stop_times.stop_id = stops.stop_id
+    JOIN trips ON stop_times.trip_id = trips.trip_id
+    WHERE stop_times.trip_id LIKE ?
+)
+GROUP BY stop_id
+ORDER BY stop_id`
+        ).all(`${agency_id}_%`) as SqlResults;
 
         if (stops.length) {
             res.json(stops.reduce((obj, stop) => {
@@ -173,7 +191,8 @@ AgencyRouter.get('/:agency_id/stops', async (req, res, next) => {
                     ...obj, 
                     [stop_id]: { 
                         ...stop, 
-                        stop_id 
+                        stop_id,
+                        route_ids: (stop.route_ids as string).split(',').map(removePrefix)
                     } 
                 };
             }, {}));

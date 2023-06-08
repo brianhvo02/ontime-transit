@@ -1,4 +1,4 @@
-import { Agency as GTFSAgency, Route, Stop as GTFSStop, Stop} from 'gtfs-types';
+import { Agency as GTFSAgency, Route } from 'gtfs-types';
 import { Feature, MultiLineString, Polygon } from 'geojson';
 
 export interface Agency {
@@ -32,5 +32,14 @@ export interface Vehicle {
 }
 
 export interface VehiclePayload { [key: string]: Vehicle };
+
+export interface Stop {
+    stop_id: string;
+    stop_name: string;
+    stop_lat: number;
+    stop_lon: number;
+    stop_url: string;
+    route_ids: string[];
+}
 
 export interface StopPayload { [key: string]: Stop };

@@ -1,5 +1,7 @@
 import { SerializedError } from "@reduxjs/toolkit";
 import { FetchBaseQueryError } from "@reduxjs/toolkit/dist/query";
+import { Feature } from "geojson";
+import { MapRef } from "react-map-gl";
 
 interface ApiError {
     error: string;

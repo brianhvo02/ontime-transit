@@ -12,6 +12,7 @@ function App() {
                 <Routes>
                     <Route path='/' Component={HomePage} />
                     <Route path='/agencies/:agencyId' Component={HomePage} />
+                    <Route path='/agencies/:agencyId/routes/:routeId' Component={HomePage} />
                     {/* <Route path='/agencies/:agencyId/stops/:stopId' Component={HomePage} /> */}
                     <Route path='/agencies/:agencyId/vehicles/:vehicleId' Component={HomePage} />
                     <Route path='/agencies/:agencyId/vehicles/:vehicleId/stops/:stopId' Component={HomePage} />

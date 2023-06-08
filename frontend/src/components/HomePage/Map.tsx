@@ -2,21 +2,21 @@ import { Tile3DLayer } from '@deck.gl/geo-layers/typed';
 import { GeoJsonLayer } from '@deck.gl/layers/typed';
 import { MapboxOverlay, MapboxOverlayProps } from '@deck.gl/mapbox/typed';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers/typed';
-import { faArrowLeft, faArrowPointer, faBuilding, faFlask, faHandPointer, faMap, faMountain, faSatellite, faShareFromSquare, faX } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faArrowPointer, faArrowRight, faBuilding, faFlask, faHandPointer, faMap, faMountain, faSatellite, faShareFromSquare, faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { CesiumIonLoader } from '@loaders.gl/3d-tiles';
 import { skipToken } from '@reduxjs/toolkit/dist/query';
 import { area, bbox } from '@turf/turf';
-import { Feature, Polygon } from 'geojson';
-import { Agency as GTFSAgency, LocationType, Stop } from 'gtfs-types';
+import { Feature, MultiLineString, Polygon } from 'geojson';
+import { Agency as GTFSAgency, Route } from 'gtfs-types';
 import { LngLatBounds } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Map, { AttributionControl, FullscreenControl, GeolocateControl, Layer, MapRef, NavigationControl, SkyLayer, Source, useControl } from 'react-map-gl';
 import { useGetAgenciesQuery, useGetStopsQuery, useGetVehiclesQuery } from '../../store/api/agency';
-import { Vehicle } from '../../store/payloads/Agency';
-import { convertApiError, hexToRGB } from '../../store/utils';
+import { Vehicle, Stop } from '../../store/payloads/Agency';
+import { convertApiError, hexToRGB } from '../../utils';
 import CustomOverlay from '../SatelliteControl';
 import './Map.scss';
 import { createPortal } from 'react-dom';
@@ -71,7 +71,7 @@ const skyLayer: SkyLayer = {
 };
 
 const HomeMap = () => {
-    const { agencyId, vehicleId, stopId } = useParams();
+    const { agencyId, routeId, vehicleId, stopId } = useParams();
     const agenciesData = useGetAgenciesQuery();
     const map = useRef<MapRef>(null);
     const [cursor, setCursor] = useState(false);
@@ -79,9 +79,13 @@ const HomeMap = () => {
     const [selectedAgency, setSelectedAgency] = useState<GTFSAgency | undefined>();
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
     const [selectedStop, setSelectedStop] = useState<Stop | undefined>();
+    const [selectedRoute, setSelectedRoute] = useState<Route | undefined>();
+    const [routePage, setRoutePage] = useState(0);
     const vehicleData = useGetVehiclesQuery(selectedAgency?.agency_id ?? skipToken, { pollingInterval: 60000 });
     const stopData = useGetStopsQuery(selectedAgency?.agency_id ?? skipToken);
-    const [hovered, setHovered] = useState<GTFSAgency | undefined>();
+    const [hoveredAgency, setHoveredAgency] = useState<GTFSAgency | undefined>();
+    const [hoveredRoute, setHoveredRoute] = useState<Route | undefined>();
+    const [hoveredStop, setHoveredStop] = useState<Stop | undefined>();
     const [showSatellite, setShowSatellite] = useState(false);
     const [showTerrain, setShowTerrain] = useState(false);
     const [show3D, setShow3D] = useState(false);
@@ -92,28 +96,32 @@ const HomeMap = () => {
     useEffect(() => {
         if (!agencyId && !loaded) setLoaded(true);
         if (agencyId && agenciesData.data) {
-            if (!loaded) {
-                const agency = agenciesData.data.agencies[agencyId]?.info;
-                if (agency) {
-                    setSelectedAgency(agency);
+            const agency = agenciesData.data.agencies[agencyId];
+            if (agency && !loaded) {
+                const agencyInfo = agency.info;
+                if (agencyInfo) {
+                    setSelectedAgency(agencyInfo);
                     setStartSelection(true);
                 }
             }
 
-            if (vehicleId) {
+            if (routeId) {
+                if (!loaded) {
+                    const route = agency.routes[routeId]?.properties;
+                    if (route) setSelectedRoute(route);
+                }
+            } else if (vehicleId) {
                 if (vehicleData.data && !loaded) {
                     const vehicle = vehicleData.data[vehicleId];
                     if (vehicle) setSelectedVehicle(vehicle);
-
-                    if (stopId) {
-                        if (stopData.data && !loaded) {
-                            const stop = stopData.data[stopId];
-                            if (stop) setSelectedStop(stop);
-                            setLoaded(true);
-                        }
-                    } else {
-                        setLoaded(true);
-                    }
+                }
+            }
+            
+            if (stopId) {
+                if (stopData.data && !loaded) {
+                    const stop = stopData.data[stopId];
+                    if (stop) setSelectedStop(stop);
+                    setLoaded(true);
                 }
             } else {
                 setLoaded(true);
@@ -209,14 +217,14 @@ const HomeMap = () => {
         getFillColor: [245, 245, 245, 0],
         onHover: pickingInfo => {
             const { properties }: Feature<Polygon, GTFSAgency> = pickingInfo.object ? pickingInfo.object : {};
-            setHovered(properties);
+            setHoveredAgency(properties);
             setCursor(!!pickingInfo.object);
         },
         onClick: (pickingInfo, event) => {
             const { properties }: Feature<Polygon, GTFSAgency> = pickingInfo.object ? pickingInfo.object : {};
             setSelectedAgency(properties);
-            setHovered(undefined);
-            map.current?.fitBounds(new LngLatBounds(bbox(pickingInfo.object) as [number, number, number, number]), { padding: 64, duration: 1000 });
+            setHoveredAgency(undefined);
+            map.current?.fitBounds(new LngLatBounds(bbox(pickingInfo.object) as [number, number, number, number]), { pitch: 55, padding: 64, duration: 1000 });
         },
         visible: !selectedAgency,
         // extensions
@@ -224,12 +232,30 @@ const HomeMap = () => {
 
     const routes = useMemo(() => 
         agenciesData.data && (
-            (hovered || selectedAgency) 
-                ? selectedVehicle 
-                    ? [agenciesData.data.agencies[selectedAgency?.agency_id || hovered?.agency_id || ''].routes[selectedVehicle.route_id]]
-                    : Object.values(agenciesData.data.agencies[selectedAgency?.agency_id || hovered?.agency_id || ''].routes ?? {}) 
+            (hoveredAgency || selectedAgency) 
+                ? (selectedRoute || hoveredRoute || selectedVehicle) 
+                    ? [agenciesData.data.agencies[selectedAgency?.agency_id || hoveredAgency?.agency_id || ''].routes[selectedRoute?.route_id || hoveredRoute?.route_id || selectedVehicle?.route_id || '']]
+                    : Object.values<Feature<MultiLineString, Route>>(agenciesData.data.agencies[selectedAgency?.agency_id || hoveredAgency?.agency_id || ''].routes ?? {})
                 : Object.values(agenciesData.data.agencies).map(agency => Object.values(agency.routes)).flat()
-        ), [agenciesData, hovered, selectedAgency, selectedVehicle]
+        ), [agenciesData, hoveredAgency, selectedAgency, selectedVehicle, hoveredRoute, selectedRoute]
+    );
+
+    const vehicles = useMemo(() =>
+        vehicleData.data && (
+            selectedVehicle
+                ? [vehicleData.data[selectedVehicle.vehicle_id]] 
+                : (selectedRoute || hoveredRoute)
+                    ? Object.values(vehicleData.data).filter(vehicle => vehicle.route_id === selectedRoute?.route_id || vehicle.route_id === hoveredRoute?.route_id)
+                    : Object.values(vehicleData.data)
+        ), [vehicleData, selectedVehicle, selectedRoute, hoveredRoute]
+    );
+
+    const agencyRoutes = useMemo(() => 
+        agenciesData.data && selectedAgency?.agency_id 
+            ? Object.values<Feature<MultiLineString, Route>>(
+                agenciesData.data.agencies[selectedAgency.agency_id].routes
+                ).sort((a, b) => a.properties.route_id.localeCompare(b.properties.route_id)) 
+            : undefined, [selectedAgency, agenciesData]
     );
 
     const routesLayer = new GeoJsonLayer({
@@ -239,35 +265,21 @@ const HomeMap = () => {
         lineWidthUnits: 'pixels',
         getLineColor: ({ properties }) => hexToRGB(properties?.route_color ?? '') ?? [254, 135, 20],
         getLineWidth: 2,
-        updateTriggers: {
-            getLineColor: [hovered, selectedAgency]
-        },
-        // extensions
     });
 
     const vehiclesLayer = new ScenegraphLayer({
         id: 'vehicles',
-        data: (selectedVehicle && vehicleData.data) ? [vehicleData.data[selectedVehicle.vehicle_id]] : (selectedAgency && vehicleData.data) ? Object.values(vehicleData.data): undefined,
+        data: vehicles,
         pickable: true,
         // sizeScale: 0.1,
         scenegraph: '/bus.glb',
         sizeMaxPixels: 1,
-        // _animations: {
-        //     '*': { speed: 1 }
-        // },
-        // dataTransform: (data, prev) => {
-        //     console.log(data, prev)
-        //     return prev;
-        // },
         getPosition: (vehicle: Vehicle) => [
             vehicle.longitude || 0,
             vehicle.latitude || 0,
         ],
         getOrientation: (vehicle: Vehicle)  => [0, 90 - (vehicle.bearing ?? 0), 90],
         _lighting: 'pbr',
-        // transitions: {
-        //     getPosition: 60000
-        // },
         updateTriggers: {
             getPosition: vehicleData,
             getOrientation: vehicleData
@@ -285,24 +297,25 @@ const HomeMap = () => {
                     duration: 1000,
                 });
         },
-        // extensions
     });
 
     const selectedVehicleStops = useMemo(() => (selectedVehicle && stopData.data) ? selectedVehicle.stops.map(({ id, timestamp }) => ({ ...stopData.data?.[id], timestamp })) : undefined, [selectedVehicle, stopData]);
 
+    const selectedRouteStops = useMemo(() => 
+        (selectedRoute && stopData.data) 
+            ? Object.values(stopData.data)
+                .filter(stop => stop.route_ids.includes(selectedRoute.route_id))
+                .sort((a, b) => a.stop_name.localeCompare(b.stop_name)) 
+            : undefined, [selectedRoute, stopData, hoveredStop]
+    );
+
     const stopsLayer = new ScenegraphLayer({
         id: 'stops',
-        data: selectedVehicleStops,
+        data: selectedVehicleStops || selectedRouteStops?.filter(stop => stop.stop_id === (hoveredStop?.stop_id ?? selectedStop?.stop_id ?? stop.stop_id)),
         pickable: true,
         sizeScale: 10,
         sizeMaxPixels: 20,
         scenegraph: '/bus_stop.glb',
-        // sizeMaxPixels: 1,
-        // sizeMinPixels: 0.1,
-        // dataTransform: (data, prev) => {
-        //     console.log(data, prev)
-        //     return prev;
-        // },
         onClick: pickingInfo => {
             const stop: Stop = pickingInfo.object;
             setSelectedStop(stop);
@@ -319,12 +332,10 @@ const HomeMap = () => {
             stop.stop_lat || 0,
         ],
         getOrientation: [0, -(selectedVehicle?.bearing ?? map.current?.getBearing() ?? 0), 90],
-        // getTranslation: [0, 0, 20],
         _lighting: 'pbr',
         updateTriggers: {
             getOrientation: selectedVehicle
         },
-        // extensions
     });
 
     if (agenciesData.isLoading || !loaded) return (
@@ -344,13 +355,14 @@ const HomeMap = () => {
         if (selectedAgency?.agency_id) {
             link += `/agencies/${selectedAgency.agency_id}`;
 
-            if (selectedVehicle) {
+            if (selectedRoute)
+                link += `/routes/${selectedRoute.route_id}`;
+
+            if (selectedVehicle)
                 link += `/vehicles/${selectedVehicle.vehicle_id}`;
 
-                if (selectedStop) {
-                    link += `/stops/${selectedStop.stop_id}`;
-                }
-            }
+            if (selectedStop) 
+                link += `/stops/${selectedStop.stop_id}`;
         }
 
         navigator.clipboard.writeText(link);
@@ -378,11 +390,18 @@ const HomeMap = () => {
                         zoom: 17
                     };
                 } else {
-                    const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
-                    return {
-                         bounds: selectedAgency ? box : new LngLatBounds(agenciesData.data?.bounds), 
-                         fitBoundsOptions: { padding: 64 } 
-                    };
+                    if (routes && selectedRoute) {
+                        return {
+                            bounds: new LngLatBounds(bbox(routes[0]) as [number, number, number, number]),
+                            fitBoundsOptions: { pitch: 55, padding: 64 } 
+                        }
+                    } else {
+                        const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
+                        return {
+                            bounds: selectedAgency ? box : new LngLatBounds(agenciesData.data?.bounds), 
+                            fitBoundsOptions: { padding: 64 } 
+                        };
+                    }
                 }
             })()}
             maxPitch={85}
@@ -455,10 +474,13 @@ const HomeMap = () => {
                         if (selectedAgency) {
                             setSelectedAgency(undefined);
                             setStartSelection(false);
-                            setHovered(undefined);
+                            setHoveredAgency(undefined);
+                            setHoveredRoute(undefined);
                             setSelectedVehicle(undefined);
                             setSelectedStop(undefined);
-                            map.current?.fitBounds(new LngLatBounds(agenciesData.data?.bounds), { padding: 64, duration: 1000 })
+                            setSelectedRoute(undefined);
+                            setRoutePage(0);
+                            map.current?.fitBounds(new LngLatBounds(agenciesData.data?.bounds), { pitch: 55, padding: 64, duration: 1000 })
                         } else {
                             setStartSelection(prev => !prev)
                         }
@@ -481,62 +503,78 @@ const HomeMap = () => {
                 <CustomOverlay>
                     <div className='display'>
                         {
-                            (selectedVehicle || selectedStop) ?
-                                <nav>
-                                    <FontAwesomeIcon icon={faArrowLeft} onClick={() => {
-                                        if (selectedStop) {
-                                            setSelectedStop(undefined);
-                                            if (selectedVehicle) {
-                                                map.current?.flyTo({ 
-                                                    center: [selectedVehicle.longitude, selectedVehicle.latitude],
-                                                    bearing: selectedVehicle.bearing ?? 0,
-                                                    pitch: 75,
-                                                    zoom: 17,
-                                                    duration: 1000,
-                                                });
-                                            } else {
+                            (selectedVehicle || selectedStop || selectedAgency || selectedRoute) &&
+                            <nav
+                                style={{
+                                    justifyContent: (selectedVehicle || selectedStop || selectedRoute)
+                                        ? 'space-between'
+                                        : 'flex-end'
+                                }} 
+                            >
+                                {
+                                    (selectedVehicle || selectedStop || selectedRoute) &&
+                                    <FontAwesomeIcon 
+                                        icon={faArrowLeft} 
+                                        onClick={() => {
+                                            if (selectedStop) {
+                                                setSelectedStop(undefined);
+                                                if (selectedVehicle) {
+                                                    map.current?.flyTo({ 
+                                                        center: [selectedVehicle.longitude, selectedVehicle.latitude],
+                                                        bearing: selectedVehicle.bearing ?? 0,
+                                                        pitch: 75,
+                                                        zoom: 17,
+                                                        duration: 1000,
+                                                    });
+                                                } else if (selectedRoute && routes) {
+                                                    map.current?.fitBounds(new LngLatBounds(bbox(routes[0]) as [number, number, number, number]), { pitch: 55, padding: 64, duration: 1000 });
+                                                }
+                                            } else if (selectedVehicle || selectedRoute) {
+                                                if (selectedVehicle) {
+                                                    setSelectedVehicle(undefined);
+                                                    if (selectedRoute && routes)
+                                                        return map.current?.fitBounds(new LngLatBounds(bbox(routes[0]) as [number, number, number, number]), { pitch: 55, padding: 64, duration: 1000 });
+                                                } else setSelectedRoute(undefined);
 
+                                                const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
+                                                if (box)
+                                                    map.current?.fitBounds(new LngLatBounds(box), { pitch: 45, padding: 64, duration: 1000 });
                                             }
-                                        } else if (selectedVehicle) {
-                                            setSelectedVehicle(undefined);
-                                            const box = agenciesData.data?.agencies[selectedAgency?.agency_id ?? '']?.box.bbox as [number, number, number, number];
-                                            if (box)
-                                                map.current?.fitBounds(new LngLatBounds(box), { padding: 64, duration: 1000 });
-                                        }
-                                    }} />
-                                    <FontAwesomeIcon icon={faShareFromSquare} onClick={shareHandler} />
-                                </nav>
-                            : selectedAgency &&
-                            <FontAwesomeIcon icon={faShareFromSquare} onClick={shareHandler} />
+                                        }} 
+                                    />
+                                }
+                                <FontAwesomeIcon 
+                                    icon={faShareFromSquare} 
+                                    onClick={shareHandler} 
+                                />
+                            </nav>
                         }
                         <section className='agency-info'>
-                            
                             {
                                 selectedAgency ?
                                 <>
                                     <h1>{selectedAgency.agency_name}</h1>
                                     <a href={selectedAgency.agency_url} target='_blank' rel='noreferer'>{selectedAgency.agency_url}</a>
-                                    <p>{ (vehicleData.data && vehicleData.isSuccess) ? `There are currently ${Object.keys(vehicleData.data).length} vehicles.` : 'Vehicle data is currently not available for this agency.' }</p>
+                                    <p>{ (vehicleData.data && vehicleData.isSuccess) ? `There are currently ${Object.keys(vehicleData.data).length} vehicles total.` : 'Vehicle data is currently not available for this agency.' }</p>
                                 </>
                                 :
                                 <>
                                     <h1 style={{ textAlign: 'center' }}>Select an agency</h1>
-                                    <ul>
+                                    <ul onMouseLeave={() => setHoveredAgency(undefined)}>
                                         {
                                             agenciesData.data && 
                                             Object.values(agenciesData.data.agencies).map(agency => 
                                                 <li 
                                                     key={agency.info.agency_id}
-                                                    onMouseEnter={() => setHovered(agency.info)}
-                                                    onMouseLeave={() => setHovered(undefined)}
+                                                    onMouseEnter={() => setHoveredAgency(agency.info)}
                                                     onClick={() => {
                                                         setSelectedAgency(agency.info);
-                                                        setHovered(undefined);
-                                                        map.current?.fitBounds(new LngLatBounds(agency.box.bbox as [number, number, number, number]), { padding: 64, duration: 1000 });
+                                                        setHoveredAgency(undefined);
+                                                        map.current?.fitBounds(new LngLatBounds(agency.box.bbox as [number, number, number, number]), { pitch: 55, padding: 64, duration: 1000 });
                                                     }}
                                                     style={{
-                                                        textDecoration: hovered?.agency_id === agency.info.agency_id ? 'underline' : 'none',
-                                                        fontWeight: hovered?.agency_id === agency.info.agency_id ? 'bold' : 'normal',
+                                                        textDecoration: hoveredAgency?.agency_id === agency.info.agency_id ? 'underline' : 'none',
+                                                        fontWeight: hoveredAgency?.agency_id === agency.info.agency_id ? 'bold' : 'normal',
                                                     }}
                                                 >{agency.info.agency_name}</li>    
                                             )
@@ -545,6 +583,98 @@ const HomeMap = () => {
                                 </>
                             }
                         </section>
+                        {
+                            agencyRoutes && !selectedRoute && !selectedVehicle && !selectedStop &&
+                            <>
+                                <nav
+                                    style={{
+                                        justifyContent: routePage === 0
+                                            ? 'flex-end'
+                                            : 'space-between'
+                                    }} 
+                                >
+                                    {
+                                        routePage > 0 &&
+                                        <FontAwesomeIcon 
+                                            icon={faArrowLeft} 
+                                            onClick={() => 
+                                                routePage > 0 &&
+                                                setRoutePage(prev => prev - 1)
+                                            }
+                                        />
+                                    }
+                                    {
+                                        (routePage + 1) * 15 < agencyRoutes.length &&
+                                        <FontAwesomeIcon 
+                                            icon={faArrowRight} 
+                                            onClick={() => 
+                                                (routePage + 1) * 15 < agencyRoutes.length &&
+                                                setRoutePage(prev => prev + 1)
+                                            }
+                                        />
+                                    }
+                                </nav>
+                                <section className='select-routes'>
+                                    <ul onMouseLeave={() => setHoveredRoute(undefined)}>
+                                        {
+                                            agencyRoutes.slice(routePage * 15, (routePage + 1) * 15).map(routeFeature => 
+                                                <li key={routeFeature.properties.route_id}>
+                                                    <p
+                                                        title={`There are currently ${vehicles?.length || 0} vehicle(s) on this route.`}
+                                                        onMouseEnter={() => setHoveredRoute(routeFeature.properties)}
+                                                        onClick={() => {
+                                                            setHoveredRoute(undefined);
+                                                            setSelectedRoute(routeFeature.properties);
+                                                            map.current?.fitBounds(new LngLatBounds(bbox(routeFeature) as [number, number, number, number]), { pitch: 55, padding: 64, duration: 1000 });
+                                                        }}
+                                                        style={{ color: '#' + (routeFeature.properties.route_color ?? 'FE8714') }}
+                                                    >{routeFeature.properties.route_long_name} - {routeFeature.properties.route_short_name}</p>
+                                                </li>    
+                                            )
+                                        }
+                                    </ul>
+                                </section>
+                            </>
+                        }
+                        {
+                            selectedRoute && !selectedVehicle && !selectedStop &&
+                            <section className='route-info'>
+                                <div style={{
+                                    color: '#' + (selectedRoute.route_color ?? 'FE8714')
+                                }}>
+                                    <h2>{selectedRoute.route_long_name}</h2>
+                                    <h3>{selectedRoute.route_short_name}</h3>
+                                </div>
+                                <p>{selectedRoute.route_desc}</p>
+                                {
+                                    selectedRoute.route_url &&
+                                    <a href={selectedRoute.route_url} target='_blank' rel='noreferer'>{selectedRoute.route_url}</a>
+                                }
+                                <p>{ vehicles ? `There are currently ${vehicles.length} vehicles on this route.` : null }</p>
+                                <h4>Stops</h4>
+                                <ul onMouseLeave={() => setHoveredStop(undefined)}>
+                                    {
+                                        selectedRouteStops?.map(stop => 
+                                            <li>
+                                                <p
+                                                    onMouseEnter={() => setHoveredStop(stop)}
+                                                    onClick={() => {
+                                                        setHoveredStop(undefined);
+                                                        setSelectedStop(stop);
+                                                        map.current?.flyTo({ 
+                                                            center: [stop.stop_lon, stop.stop_lat],
+                                                            pitch: 75,
+                                                            zoom: 17,
+                                                            duration: 1000,
+                                                        });
+                                                    }}
+                                                >{stop.stop_name}</p>
+                                            </li>    
+                                        )
+                                    }
+                                </ul>
+                            </section>
+                        }
                         {
                             selectedVehicle && !selectedStop && 
                             <section className='vehicle-info'>
