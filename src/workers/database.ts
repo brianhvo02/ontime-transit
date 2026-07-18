@@ -1,6 +1,6 @@
 import type { FeatureCollection } from 'geojson';
 import { bbox } from "@turf/bbox";
-import { getItem, setItem } from 'localforage';
+import localforage from 'localforage';
 import sqlite3InitModule, { type OpfsDatabase } from '@sqlite.org/sqlite-wasm';
 import type { Agency } from 'gtfs-types';
 
@@ -9,33 +9,31 @@ export const ensureDatabase = async () => {
   const opfs = await navigator.storage.getDirectory();
   const remoteHash = await fetch('https://ontime-feeds.brianhuyvo.com/hashes/RG.hash')
     .then(res => res.text());
-  const localHash = await getItem<string>('hash');
+  const localHash = await localforage.getItem<string>('hash');
   const fh = localHash !== remoteHash ? await opfs.getFileHandle('gtfs.s3db', { create: true }) : null;
   const ah = await fh?.createSyncAccessHandle();
   const collection = await (ah ? Promise.all([
     fetch('https://ontime-feeds.brianhuyvo.com/feeds/RG.db')
       .then(res => {
         const reader = res.body?.getReader();
-        // read() returns a promise that resolves when a value has been received
         reader?.read().then(async function pump({ done, value }): Promise<void> {
           if (done) {
             if (value)
               ah.write(value);
             ah.flush();
             ah.close();
-            await setItem<string>('hash', remoteHash)
+            await localforage.setItem<string>('hash', remoteHash);
             return;
           }
           ah.write(value);
 
-          // Read some more, and call this function again
           return reader.read().then(pump);
         });
       }),
     fetch('https://ontime-feeds.brianhuyvo.com/geojson/RG/RG.geojson')
       .then(res => res.json())
-      .then(data => setItem<FeatureCollection>('geojson', data)),
-  ]).then(([, geojson]) => geojson) : getItem<FeatureCollection>('geojson'));
+      .then(data => localforage.setItem<FeatureCollection>('geojson', data)),
+  ]).then(([, geojson]) => geojson) : localforage.getItem<FeatureCollection>('geojson'));
 
   if (!collection) return collection;
 
