@@ -1,5 +1,6 @@
 import './App.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import SFBay511Logo from './assets/511SFBay_color_web.png';
 import { useQuery } from '@tanstack/react-query';
 import CircularProgress from '@mui/material/CircularProgress';
 import { Box, List, ListItem, ListItemButton, ListItemText, Paper, Typography } from '@mui/material';
@@ -93,7 +94,6 @@ export default function App() {
         <Box sx={{
           display: 'flex', gap: '1rem',
           flexDirection: 'column',
-          justifyContent: 'flex-start',
           alignItems: 'center',
           width: '100%',
           maxHeight: 'calc(100vh - 4rem)',
@@ -115,6 +115,17 @@ export default function App() {
             ))}
           </List> : 
           <CircularProgress size={24} /> }
+          <Box sx={{
+            display: 'flex', gap: '1rem',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+          }} className='data-attribution'>
+            <Typography variant='caption'>Data provided by</Typography>
+            <a href='https://511.org' target='_blank' rel='noopener noreferrer'>
+              <img src={SFBay511Logo} alt='511 SF Bay' />
+            </a>
+          </Box>
         </Box>
       </Box>
       <Map

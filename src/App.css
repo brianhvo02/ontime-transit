@@ -10,7 +10,8 @@ main {
   align-items: center;
 }
 
-canvas {
-  width: 75%;
-  height: auto;
+.data-attribution img {
+  width: 200px;
+  height: 90px;
+  object-fit: cover;
 }
