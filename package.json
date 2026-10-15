@@ -20,7 +20,7 @@
     "@types/mapbox-gl": "^3.4.1",
     "comlink": "^4.4.2",
     "deck.gl": "^9.3.7",
-    "gtfs": "^4.19.4",
+    "gtfs": "^4.21.0",
     "localforage": "^1.10.0",
     "mapbox-gl": "^3.26.0",
     "react": "^19.2.7",
