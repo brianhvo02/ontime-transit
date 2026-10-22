@@ -35,7 +35,7 @@
     "gtfs-types": "^5.1.0",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1",
+    "vite": "^8.3.5",
     "vite-plugin-comlink": "^5.3.0"
   },
   "allowScripts": {
